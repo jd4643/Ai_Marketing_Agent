@@ -1,0 +1,9 @@
+com\marketing\analytics\api\AnalyticsController$IngestRequest.class
+com\marketing\analytics\model\CampaignMetric.class
+com\marketing\analytics\repo\CampaignMetricRepository.class
+com\marketing\common\RequestIdFilter.class
+com\marketing\common\GlobalExceptionHandler.class
+com\marketing\common\ApiError.class
+com\marketing\analytics\Application.class
+com\marketing\analytics\model\BusinessProfile.class
+com\marketing\analytics\api\AnalyticsController.class
