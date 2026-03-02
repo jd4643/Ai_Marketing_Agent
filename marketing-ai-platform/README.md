@@ -41,6 +41,63 @@ cp infra/.env.example infra/.env
 docker compose -f infra/docker-compose.yml --env-file infra/.env up --build
 ```
 
+
+## Windows PowerShell quick start (no `head`, no local `psql` needed)
+If you are on PowerShell, use these commands instead of Unix pipeline examples:
+
+```powershell
+# 1) Find the postgres container id
+$pg = docker ps --filter "name=postgres" --format "{{.ID}}" | Select-Object -First 1
+
+# 2) Insert sample business profile using psql inside the container
+docker exec -it $pg psql -U postgres -d marketing_ai -c "INSERT INTO business_profile(id,business_name,industry,created_at,updated_at) VALUES ('11111111-1111-1111-1111-111111111111','Acme Jewelry','jewelry',NOW(),NOW()) ON CONFLICT (id) DO NOTHING;"
+
+# 3) Strategy generate via gateway
+Invoke-RestMethod -Method Post -Uri "http://localhost:8080/strategy/generate" -Headers @{"Content-Type"="application/json";"X-Request-Id"="550e8400-e29b-41d4-a716-446655440000"} -Body '{"businessId":"11111111-1111-1111-1111-111111111111","objective":"sales","monthlyBudget":2000,"trends":["minimalist jewelry"],"notes":"focus DTC"}'
+
+# 4) Strategy history
+Invoke-RestMethod -Method Get -Uri "http://localhost:8080/strategy/history?businessId=11111111-1111-1111-1111-111111111111&limit=20"
+```
+
+### Why your previous command failed
+- `head` is a Unix tool, not a default PowerShell command. Use `Select-Object -First 1`.
+- `psql` is not required on Windows host; run `psql` inside the running postgres container with `docker exec`.
+- `-c` belongs to `psql`, so it must be part of the same `docker exec ... psql ... -c "SQL"` command.
+
+## Postman steps for strategy-service
+1. Method `POST`, URL `http://localhost:8080/strategy/generate`.
+2. Header `Content-Type: application/json`.
+3. Header `X-Request-Id: <uuid>` (example: `550e8400-e29b-41d4-a716-446655440000`).
+4. Body raw JSON:
+```json
+{
+  "businessId":"11111111-1111-1111-1111-111111111111",
+  "objective":"sales",
+  "monthlyBudget":2000,
+  "trends":["minimalist jewelry"],
+  "notes":"focus DTC"
+}
+```
+5. Send request and confirm response contains `requestId`, `strategyVersion`, `platformBudgetSplit`, `campaignPlan`, `funnelStrategy`, `expectedCPL`, `expectedROAS`, `reasoning`, `assumptions`.
+
+
+## Strategy Intelligence Engine
+`strategy-service` now runs a deterministic intelligence layer before LLM generation:
+- Decision tree picks a strategy template key from `strategy_template` using online/offline motion, price tier, budget tier, and objective.
+- Confidence scorer outputs 0–100 with weighted breakdown (`margin_strength`, `competition_density`, `offer_strength`, `market_demand`, `channel_fit`, `trust_level`).
+- Pattern matcher checks prior successful runs and can reuse a proven template when similarity exceeds threshold.
+- Every run persists intelligence artifacts in `strategy_run_intel` for feedback loop learning.
+
+Environment knobs:
+- `STRATEGY_SIMILARITY_THRESHOLD` (default `0.80`)
+- `STRATEGY_SUCCESS_MIN_ROAS` (default `2.0`)
+- `STRATEGY_SUCCESS_MIN_CONVERSIONS` (default `10`)
+
+To inspect stored intelligence:
+```bash
+curl 'localhost:8080/strategy/intel/history?businessId=11111111-1111-1111-1111-111111111111&limit=20'
+```
+
 ## API examples
 Create sample business profile:
 ```bash
