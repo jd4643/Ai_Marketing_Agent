@@ -4,4 +4,6 @@ import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
 
-public record StrategyRequest(UUID businessId, String objective, BigDecimal monthlyBudget, List<String> trends, String notes) {}
+public record StrategyRequest(UUID businessId, String objective, BigDecimal monthlyBudget, List<String> trends,
+                              String notes) {
+}
