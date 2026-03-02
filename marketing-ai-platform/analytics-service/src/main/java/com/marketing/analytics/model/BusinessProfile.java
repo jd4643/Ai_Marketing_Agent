@@ -1,5 +1,106 @@
 package com.marketing.analytics.model;
-import jakarta.persistence.*;import java.time.Instant;import java.util.UUID;
-@Entity @Table(name="business_profile")
-public class BusinessProfile { @Id UUID id; @Column(nullable=false) String businessName; @Column(nullable=false) String industry; String product; String priceRange; String location; String targetAudience; String websiteUrl; @Column(nullable=false) Instant createdAt; @Column(nullable=false) Instant updatedAt;
-public UUID getId(){return id;} public void setId(UUID id){this.id=id;} public String getBusinessName(){return businessName;} public void setBusinessName(String v){businessName=v;} public String getIndustry(){return industry;} public void setIndustry(String v){industry=v;} public String getProduct(){return product;} public void setProduct(String v){product=v;} public String getPriceRange(){return priceRange;} public void setPriceRange(String v){priceRange=v;} public String getLocation(){return location;} public void setLocation(String v){location=v;} public String getTargetAudience(){return targetAudience;} public void setTargetAudience(String v){targetAudience=v;} public String getWebsiteUrl(){return websiteUrl;} public void setWebsiteUrl(String v){websiteUrl=v;} public Instant getCreatedAt(){return createdAt;} public void setCreatedAt(Instant v){createdAt=v;} public Instant getUpdatedAt(){return updatedAt;} public void setUpdatedAt(Instant v){updatedAt=v;} }
+
+import jakarta.persistence.*;
+
+import java.time.Instant;
+import java.util.UUID;
+
+@Entity
+@Table(name = "business_profile")
+public class BusinessProfile {
+    @Id
+    UUID id;
+    @Column(nullable = false)
+    String businessName;
+    @Column(nullable = false)
+    String industry;
+    String product;
+    String priceRange;
+    String location;
+    String targetAudience;
+    String websiteUrl;
+    @Column(nullable = false)
+    Instant createdAt;
+    @Column(nullable = false)
+    Instant updatedAt;
+
+    public UUID getId() {
+        return id;
+    }
+
+    public void setId(UUID id) {
+        this.id = id;
+    }
+
+    public String getBusinessName() {
+        return businessName;
+    }
+
+    public void setBusinessName(String v) {
+        businessName = v;
+    }
+
+    public String getIndustry() {
+        return industry;
+    }
+
+    public void setIndustry(String v) {
+        industry = v;
+    }
+
+    public String getProduct() {
+        return product;
+    }
+
+    public void setProduct(String v) {
+        product = v;
+    }
+
+    public String getPriceRange() {
+        return priceRange;
+    }
+
+    public void setPriceRange(String v) {
+        priceRange = v;
+    }
+
+    public String getLocation() {
+        return location;
+    }
+
+    public void setLocation(String v) {
+        location = v;
+    }
+
+    public String getTargetAudience() {
+        return targetAudience;
+    }
+
+    public void setTargetAudience(String v) {
+        targetAudience = v;
+    }
+
+    public String getWebsiteUrl() {
+        return websiteUrl;
+    }
+
+    public void setWebsiteUrl(String v) {
+        websiteUrl = v;
+    }
+
+    public Instant getCreatedAt() {
+        return createdAt;
+    }
+
+    public void setCreatedAt(Instant v) {
+        createdAt = v;
+    }
+
+    public Instant getUpdatedAt() {
+        return updatedAt;
+    }
+
+    public void setUpdatedAt(Instant v) {
+        updatedAt = v;
+    }
+}
