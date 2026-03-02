@@ -1,0 +1,49 @@
+services:
+  postgres:
+    image: postgres:16
+    env_file: [.env]
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    ports: ["5432:5432"]
+    volumes: ["pg_data:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD-SHELL","pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  analytics-service:
+    build: ../analytics-service
+    env_file: [.env]
+    ports: ["8083:8083"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+  strategy-service:
+    build: ../strategy-service
+    env_file: [.env]
+    ports: ["8081:8081"]
+    depends_on: [analytics-service]
+  creative-service:
+    build: ../creative-service
+    env_file: [.env]
+    ports: ["8082:8082"]
+    depends_on: [analytics-service]
+  trend-service:
+    build: ../trend-service
+    env_file: [.env]
+    ports: ["8091:8091"]
+    depends_on: [postgres]
+  generation-service:
+    build: ../generation-service
+    env_file: [.env]
+    ports: ["8092:8092"]
+  api-gateway:
+    build: ../api-gateway
+    env_file: [.env]
+    ports: ["8080:8080"]
+    depends_on: [strategy-service, creative-service, analytics-service, trend-service, generation-service]
+volumes:
+  pg_data:
