@@ -2,8 +2,8 @@ package com.marketing.strategy;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.nio.file.Files;
-import java.nio.file.Path;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.Statement;
@@ -21,12 +21,19 @@ class StrategyIntelRepositoryIntegrationTest {
       .withUsername("postgres")
       .withPassword("postgres");
 
+  private String readMigration(String name) throws Exception {
+    try (InputStream is = getClass().getClassLoader().getResourceAsStream("db/migration/" + name)) {
+      if (is == null) throw new IllegalStateException("Migration not found on classpath: db/migration/" + name);
+      return new String(is.readAllBytes(), StandardCharsets.UTF_8);
+    }
+  }
+
   @Test
   void analyticsMigrationsSeedTemplatesAndIntelInsertWorks() throws Exception {
     try (Connection c = DriverManager.getConnection(postgres.getJdbcUrl(), postgres.getUsername(), postgres.getPassword());
          Statement s = c.createStatement()) {
-      String v1 = Files.readString(Path.of("..", "analytics-service", "src", "main", "resources", "db", "migration", "V1__init.sql"));
-      String v2 = Files.readString(Path.of("..", "analytics-service", "src", "main", "resources", "db", "migration", "V2__strategy_intelligence.sql"));
+      String v1 = readMigration("V1__init.sql");
+      String v2 = readMigration("V2__strategy_intelligence.sql");
       for (String stmt : (v1 + "\n" + v2).split(";\\n")) {
         String sql = stmt.trim();
         if (!sql.isEmpty()) {
