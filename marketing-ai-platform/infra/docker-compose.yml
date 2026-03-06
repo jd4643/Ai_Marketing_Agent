@@ -35,7 +35,9 @@ services:
     build: ../trend-service
     env_file: [.env]
     ports: ["8091:8091"]
-    depends_on: [postgres]
+    depends_on:
+      postgres:
+        condition: service_healthy
   generation-service:
     build: ../generation-service
     env_file: [.env]
