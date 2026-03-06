@@ -6,9 +6,12 @@ import io.github.bucket4j.Refill;
 import jakarta.annotation.PostConstruct;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.Arrays;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -31,9 +34,40 @@ public class GatewayConfig {
   @Value("${gateway.rate-limit-per-minute:60}")
   int rateLimit;
 
+  @Value("${gateway.cors.allowed-origins:http://localhost:3000}")
+  String allowedOrigins;
+
+  @Value("${gateway.cors.allowed-methods:GET,POST,PUT,DELETE,OPTIONS}")
+  String allowedMethods;
+
+  @Value("${gateway.cors.allowed-headers:Authorization,Content-Type,X-Request-Id}")
+  String allowedHeaders;
+
+  @Value("${gateway.cors.allow-credentials:false}")
+  boolean allowCredentials;
+
+  @Value("${gateway.cors.max-age:3600}")
+  long corsMaxAge;
+
+  private List<String> parsedOrigins;
+  private List<String> parsedMethods;
+  private List<String> parsedHeaders;
+
   @PostConstruct
   void init() {
     log.info("gateway_config rateLimit={}", rateLimit);
+    parsedOrigins = splitTrimmed(allowedOrigins);
+    parsedMethods = splitTrimmed(allowedMethods);
+    parsedHeaders = splitTrimmed(allowedHeaders);
+    log.info("gateway_cors allowedOrigins={} allowedMethods={} allowedHeaders={} allowCredentials={} maxAge={}",
+        parsedOrigins, parsedMethods, parsedHeaders, allowCredentials, corsMaxAge);
+  }
+
+  private static List<String> splitTrimmed(String csv) {
+    return Arrays.stream(csv.split(","))
+        .map(String::trim)
+        .filter(s -> !s.isEmpty())
+        .collect(Collectors.toList());
   }
 
   @Bean
@@ -71,9 +105,11 @@ public class GatewayConfig {
   @Bean
   CorsWebFilter corsFilter() {
     CorsConfiguration c = new CorsConfiguration();
-    c.addAllowedOriginPattern("*");
-    c.addAllowedHeader("*");
-    c.addAllowedMethod("*");
+    c.setAllowedOrigins(parsedOrigins);
+    c.setAllowedMethods(parsedMethods);
+    c.setAllowedHeaders(parsedHeaders);
+    c.setAllowCredentials(allowCredentials);
+    c.setMaxAge(corsMaxAge);
     UrlBasedCorsConfigurationSource s = new UrlBasedCorsConfigurationSource();
     s.registerCorsConfiguration("/**", c);
     return new CorsWebFilter(s);
