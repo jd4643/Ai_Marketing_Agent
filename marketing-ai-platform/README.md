@@ -98,10 +98,78 @@ To inspect stored intelligence:
 curl 'localhost:8080/strategy/intel/history?businessId=11111111-1111-1111-1111-111111111111&limit=20'
 ```
 
-## API examples
-Create sample business profile:
+## New User Onboarding
+New users **must create a business profile** before calling `/strategy/generate`. The onboarding endpoints live in `strategy-service` under the `/strategy/business-profiles` prefix.
+
+### 1) Create a business profile
 ```bash
-docker exec -it $(docker ps --filter name=postgres --format '{{.ID}}' | head -n1) psql -U postgres -d marketing_ai -c "INSERT INTO business_profile(id,business_name,industry,created_at,updated_at) VALUES ('11111111-1111-1111-1111-111111111111','Acme Jewelry','jewelry',NOW(),NOW());"
+curl -X POST localhost:8080/strategy/business-profiles \
+  -H 'Content-Type: application/json' \
+  -H 'X-Request-Id: 550e8400-e29b-41d4-a716-446655440000' \
+  -d '{
+    "businessName": "Acme Jewelry",
+    "industry": "jewelry",
+    "product": "rings",
+    "priceRange": "$50-$200",
+    "location": "US",
+    "targetAudience": "women 25-45",
+    "websiteUrl": "https://acme.example.com"
+  }'
+```
+Response (`201 Created`):
+```json
+{
+  "businessId": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+  "createdAt": "2026-03-03T12:00:00Z"
+}
+```
+
+### 2) Generate strategy using the returned businessId
+```bash
+curl -X POST localhost:8080/strategy/generate \
+  -H 'Content-Type: application/json' \
+  -H 'X-Request-Id: 660e8400-e29b-41d4-a716-446655440001' \
+  -d '{
+    "businessId": "<businessId from step 1>",
+    "objective": "sales",
+    "monthlyBudget": 2000,
+    "trends": ["minimalist jewelry"],
+    "notes": "focus DTC"
+  }'
+```
+
+### 3) Retrieve a business profile
+```bash
+curl localhost:8080/strategy/business-profiles/<businessId> \
+  -H 'X-Request-Id: 770e8400-e29b-41d4-a716-446655440002'
+```
+
+### 4) Update a business profile
+```bash
+curl -X PUT localhost:8080/strategy/business-profiles/<businessId> \
+  -H 'Content-Type: application/json' \
+  -H 'X-Request-Id: 880e8400-e29b-41d4-a716-446655440003' \
+  -d '{
+    "businessName": "Acme Fine Jewelry",
+    "industry": "jewelry",
+    "product": "rings and bracelets",
+    "priceRange": "$100-$500",
+    "location": "US",
+    "targetAudience": "women 25-55",
+    "websiteUrl": "https://acmefine.example.com"
+  }'
+```
+
+#### Validation
+- `businessName` and `industry` are required (non-blank).
+- `websiteUrl` may be null or blank.
+- Invalid requests return `400` with the standard `ApiError` JSON including `requestId`.
+- Fetching or updating a non-existent profile returns `404`.
+
+## API examples
+Create business profile (onboarding — see above):
+```bash
+curl -X POST localhost:8080/strategy/business-profiles -H 'Content-Type: application/json' -H 'X-Request-Id: 550e8400-e29b-41d4-a716-446655440000' -d '{"businessName":"Acme Jewelry","industry":"jewelry"}'
 ```
 
 Generate strategy:

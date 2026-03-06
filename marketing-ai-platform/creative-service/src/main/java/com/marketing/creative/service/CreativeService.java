@@ -1,6 +1,6 @@
 package com.marketing.creative.service;
 import com.fasterxml.jackson.core.type.TypeReference;import com.fasterxml.jackson.databind.ObjectMapper;import com.marketing.creative.api.CreativeController.GenerateRequest;
-import java.sql.*;import java.time.Instant;import java.time.temporal.ChronoUnit;import java.util.*;import java.util.stream.Collectors;import javax.sql.DataSource;
+import java.sql.*;import java.sql.Connection;import java.time.Instant;import java.time.temporal.ChronoUnit;import java.util.*;import java.util.stream.Collectors;import javax.sql.DataSource;
 import okhttp3.*;import org.springframework.beans.factory.annotation.Value;import org.springframework.stereotype.Service;
 @Service
 public class CreativeService {

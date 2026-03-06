@@ -10,6 +10,7 @@ import time
 logging.basicConfig(level=logging.INFO, format='{"level":"%(levelname)s","service":"trend-service","requestId":"%(request_id)s","message":"%(message)s"}')
 logger = logging.getLogger(__name__)
 app = FastAPI()
+
 @app.middleware("http")
 async def request_id_middleware(request: Request, call_next):
     request_id=request.headers.get("X-Request-Id", str(uuid.uuid4()))
@@ -24,6 +25,22 @@ async def err_handler(request: Request, exc: Exception):
 
 DB_DSN = os.getenv("PY_DB_DSN", "dbname=marketing_ai user=postgres password=change_me host=postgres port=5432")
 INDUSTRY_KEYWORDS={"jewelry":["gold necklace","engagement ring","minimalist jewelry"],"fashion":["streetwear","capsule wardrobe","athleisure"]}
+
+def init_db():
+    with connect(DB_DSN) as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS trends (
+                    id UUID PRIMARY KEY,
+                    keyword VARCHAR(255),
+                    source VARCHAR(100),
+                    industry VARCHAR(100),
+                    geo VARCHAR(10),
+                    trend_score FLOAT,
+                    captured_at TIMESTAMPTZ
+                )
+            """)
+        conn.commit()
 
 def run_refresh(industry=None):
     pytrends=TrendReq(hl='en-US', tz=360)
@@ -49,6 +66,7 @@ def scheduler():
 
 @app.on_event("startup")
 def startup():
+    init_db()  # creates trends table if it doesn't exist
     Thread(target=scheduler, daemon=True).start()
 
 @app.get("/health")

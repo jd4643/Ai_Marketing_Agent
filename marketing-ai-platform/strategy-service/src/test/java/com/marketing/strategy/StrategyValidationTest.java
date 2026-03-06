@@ -3,6 +3,7 @@ package com.marketing.strategy;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.marketing.strategy.service.BusinessProfileService;
 import com.marketing.strategy.service.StrategyService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -15,6 +16,7 @@ import org.springframework.test.web.servlet.MockMvc;
 class StrategyValidationTest {
   @Autowired MockMvc mvc;
   @MockBean StrategyService strategyService;
+  @MockBean BusinessProfileService businessProfileService;
 
   @Test void badRequest() throws Exception {
     mvc.perform(post("/strategy/generate").header("X-Request-Id", "550e8400-e29b-41d4-a716-446655440000")

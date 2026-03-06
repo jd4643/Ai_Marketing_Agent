@@ -20,7 +20,7 @@ class PromptBuilderInjectionTest {
 
     String prompt = new IntelPromptBuilder().build(
         Map.of("industry", "jewelry"), "sales", 2000, t,
-        "metrics=[{platform=meta}] winners=[{hook=offer}]", List.of("wedding trends"), 72);
+        "metrics=[{platform=meta}] winners=[{hook=offer}]", List.of("wedding trends"), 72, false);
     assertTrue(prompt.contains("ONLINE_MID_TICKET_META_FUNNEL_RETARGET"));
     assertTrue(prompt.contains("metrics"));
     assertTrue(prompt.contains("winners"));
