@@ -60,7 +60,7 @@ def refresh(industry: str|None=None):
     return {"status":"OK"}
 
 @app.get("/trends/latest")
-def latest(industry: str|None = Query(default=None), days:int=7, limit:int=20):
+def latest(industry: str|None = Query(default=None), days:int=Query(default=7, ge=1, le=365), limit:int=Query(default=20, ge=1, le=100)):
     since=datetime.now(timezone.utc)-timedelta(days=days)
     with connect(DB_DSN) as conn:
         with conn.cursor() as cur:
