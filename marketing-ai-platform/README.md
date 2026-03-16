@@ -78,7 +78,7 @@ Invoke-RestMethod -Method Get -Uri "http://localhost:8080/strategy/history?busin
   "notes":"focus DTC"
 }
 ```
-5. Send request and confirm response contains `requestId`, `strategyVersion`, `platformBudgetSplit`, `campaignPlan`, `funnelStrategy`, `expectedCPL`, `expectedROAS`, `reasoning`, `assumptions`.
+docker compose -f docker-compose.yml --env-file .env up --build5. Send request and confirm response contains the **original fields** (`requestId`, `strategyVersion`, `platformBudgetSplit`, `campaignPlan`, `funnelStrategy`, `expectedCPL`, `expectedROAS`, `reasoning`, `assumptions`) **plus new consultant-style playbook sections** (see [Consultant-Style Strategy Output](#consultant-style-strategy-output) below).
 
 
 ## Strategy Intelligence Engine
@@ -201,3 +201,174 @@ curl -X POST localhost:8080/generate/image -H 'Content-Type: application/json' -
 - `strategy-service` and `creative-service` require `OPENAI_API_KEY` for live LLM responses.
 - If key is missing/invalid, deterministic fallback/stub JSON responses are returned and history is recorded.
 - `generation-service` intentionally returns `STUBBED` until `OPENAI_IMAGE_API_KEY` provider integration is added.
+
+---
+
+## Consultant-Style Strategy Output
+
+### What changed (v2)
+The `/strategy/generate` endpoint now returns a **full marketing playbook** instead of a flat budget template.
+
+**Before (v1):** The response contained only `platformBudgetSplit`, `campaignPlan`, `funnelStrategy`, `expectedCPL`, `expectedROAS`, `reasoning`, and `assumptions`. This felt generic and template-like — a budget calculator, not a consultant.
+
+**After (v2):** The response still contains all original fields (backward-compatible), but now includes **16 additional consultant-style sections** that make the strategy directly actionable:
+
+| Section | Description |
+|---|---|
+| `businessSnapshot` | Business-specific summary using actual profile facts |
+| `marketAnalysis` | Competition context, demand signals, buying behavior, seasonal factors |
+| `customerPersona` | Primary buyer, motivations, pain points, purchase triggers |
+| `whyThisStrategy` | Why chosen platforms fit THIS business; why others are deprioritized |
+| `platformStrategy` | Per-platform: why chosen, objective, budget, duration, audience, creative format, success metric |
+| `campaignArchitecture` | Campaign names/themes, ad group logic, keyword direction (Google), retargeting logic (Meta/TikTok) |
+| `creativeStrategy` | Creative angles, hooks, messaging style, content types, examples |
+| `creativesNeeded` | Exact assets to prepare: image/video/carousel/reel/testimonial with specs |
+| `executionRoadmap` | Week 1-4 plan: what to launch, measure, and change |
+| `setupChecklist` | Tracking, accounts, landing page, WhatsApp/contact, conversion events, Google Business Profile |
+| `landingPageRecommendations` | Where to send traffic, required conversion elements |
+| `offerStrategy` | Promotion, CTA, urgency tactic |
+| `measurementPlan` | KPI targets, evaluation windows, stop-loss rules, scaling rules |
+| `risksAndMitigations` | Likely problems and specific mitigation actions |
+| `first14DaysLearningPlan` | Cold-start learning plan: data to collect, decisions to defer, testing plan |
+| `humanReadablePlanMarkdown` | Full Markdown strategy document for UI rendering — feels like a human strategist wrote it |
+
+### Why it behaves like a consultant, not a budget calculator
+1. **Prompt engineering:** The LLM is instructed to behave as a "Senior Marketing Consultant and Growth Strategist" with strict anti-generic rules.
+2. **Five structured context sections** are injected into the prompt separately (Business Memory, Performance Memory, Creative Winners, Trend Signals, Strategy Intelligence) — the LLM has rich context to personalize.
+3. **Deterministic engine is source of truth:** The Strategy Intelligence Engine (decision tree, confidence scoring, pattern matching) selects the template. The LLM explains and elaborates — it cannot override the chosen template or invent fake performance data.
+4. **Anti-generic validation** catches template-like output and retries or enriches deterministically.
+5. **Rich fallback:** Even without OpenAI, the fallback builds all 16 playbook sections from the business profile and template data.
+
+### How anti-generic detection works
+After the LLM returns JSON, a validation layer checks:
+- Business name is referenced somewhere in the output
+- Industry is referenced somewhere in the output
+- Platform choice explanation exists (`whyThisStrategy` or `platformStrategy`)
+- `executionRoadmap` section exists
+- `setupChecklist` section exists
+- `creativeStrategy` section exists
+- At least 4 of 16 consultant sections are present (not a flat budget template)
+
+**If validation fails:**
+1. **Retry once** with a stronger prompt that includes the specific violations.
+2. If the retry also fails, **enrich** the LLM output with deterministic fallback sections (only fills missing sections, preserves what the LLM got right).
+
+This approach is documented in `StrategyService.validateNotGeneric()` and `StrategyService.enrichWithFallbackSections()`.
+
+### How cold-start users are handled
+A "cold start" is detected when:
+- No campaign metrics exist for the business (or all conversions = 0)
+- No creative winners exist
+
+Cold-start users receive:
+- **Conservative budget allocation** and realistic expectations (ranges, not point estimates)
+- **`first14DaysLearningPlan`** with data to collect, decisions to defer, and structured testing plan
+- **Prompt instructions** that explicitly tell the LLM: "No historical data exists — focus on learning, not sales targets"
+- **Markdown plan** that clearly flags the learning phase
+
+As the business accumulates performance data and creative winners, subsequent strategy generations become increasingly personalized and data-driven.
+
+### How strategy becomes smarter over time
+1. **Performance memory:** Each generation uses the last 30 days of campaign metrics (spend, ROAS, conversions by platform).
+2. **Creative winners:** Top 3 performing creatives are injected — the LLM can reference winning hooks and angles.
+3. **Pattern matching:** If a previous strategy run with similar parameters was successful (ROAS ≥ 2.0 or conversions ≥ 10), the proven template is reused.
+4. **Trend signals:** The latest 7-day trends for the business's industry are injected.
+5. **Confidence scoring:** The deterministic confidence score (0–100) adjusts based on data availability — cold starts score lower, data-rich businesses score higher.
+
+### Sample request
+```bash
+curl -X POST localhost:8080/strategy/generate \
+  -H 'Content-Type: application/json' \
+  -H 'X-Request-Id: 550e8400-e29b-41d4-a716-446655440000' \
+  -d '{
+    "businessId": "11111111-1111-1111-1111-111111111111",
+    "objective": "sales",
+    "monthlyBudget": 2000,
+    "trends": ["minimalist jewelry"],
+    "notes": "focus DTC"
+  }'
+```
+
+### Sample response (abbreviated)
+```json
+{
+  "requestId": "550e8400-e29b-41d4-a716-446655440000",
+  "strategyVersion": "v2",
+  "platformBudgetSplit": { "meta": 1000, "google": 600, "tiktok": 400, "youtube": 0 },
+  "campaignPlan": [
+    { "platform": "meta", "dailyBudget": 33.33, "objective": "conversions", "targeting": "women 25-45 interested in jewelry", "creativeHook": "Discover Acme Jewelry — handcrafted rings starting at $50" }
+  ],
+  "funnelStrategy": "Top-of-funnel awareness on Meta → retargeting engaged users → Google search capture for high-intent buyers",
+  "expectedCPL": "$8-$15 range (conservative, pending learning phase data)",
+  "expectedROAS": "1.5x-2.5x after 30 days of optimization",
+  "reasoning": "Acme Jewelry sells rings at $50-$200 targeting women 25-45. Meta is the primary channel for visual product discovery...",
+  "assumptions": ["No prior ad history — estimates are conservative", "Website is conversion-ready"],
+
+  "businessSnapshot": {
+    "summary": "Acme Jewelry is an online jewelry business selling rings at $50-$200, targeting women 25-45 via https://acme.example.com."
+  },
+  "marketAnalysis": {
+    "competitionContext": "The online jewelry market is highly competitive with both DTC brands and marketplaces...",
+    "demandContext": "Minimalist jewelry is trending based on recent signals...",
+    "buyingBehavior": "Jewelry purchases are often emotional, gift-driven, or self-reward...",
+    "seasonalConsiderations": "Valentine's Day, Mother's Day, and holiday season drive peak demand..."
+  },
+  "customerPersona": {
+    "primaryBuyer": "Women aged 25-45, urban, mid-income, fashion-conscious",
+    "motivations": "Self-expression, gifting, treating themselves",
+    "painPoints": "Trust in online jewelry quality, sizing uncertainty",
+    "triggers": "Sales events, influencer endorsements, friend recommendations"
+  },
+  "executionRoadmap": {
+    "week1": "Set up Meta Pixel on acme.example.com, create Business Manager, launch 3 awareness ad sets...",
+    "week2": "Review CTR and CPM data, pause underperforming creatives, test 2 new hooks...",
+    "week3": "Launch retargeting campaign for website visitors, narrow audiences...",
+    "week4": "Full performance review, scale winning ad sets by 20%, plan month 2...",
+    "launchFirst": "Meta awareness campaign with product hero images",
+    "measureFirst": "CTR, CPM, link clicks in first 72 hours",
+    "changeAfter": "Pause creatives with CTR < 0.8% after 1000 impressions"
+  },
+  "setupChecklist": [
+    { "item": "Meta Pixel", "details": "Install on acme.example.com", "priority": "HIGH" },
+    { "item": "Conversion Events", "details": "Configure Purchase and AddToCart events", "priority": "HIGH" }
+  ],
+  "creativeStrategy": {
+    "creativeAngles": ["Minimalist elegance", "Gift-worthy", "Handcrafted quality"],
+    "hooks": ["Discover rings you won't find anywhere else", "The perfect gift under $200"],
+    "messagingStyle": "Emotional, aspirational, benefit-focused",
+    "contentTypes": ["Product hero images", "Short-form video (15s)", "Carousel of collections"],
+    "examples": ["Close-up of ring on hand with natural lighting", "Unboxing reel with customer reaction"]
+  },
+  "humanReadablePlanMarkdown": "# Marketing Strategy for Acme Jewelry\n\n## Business Overview\nAcme Jewelry sells handcrafted rings...\n\n## Week-by-Week Plan\n- **Week 1:** ...",
+
+  "first14DaysLearningPlan": null,
+  "risksAndMitigations": [
+    { "risk": "Low initial conversion rate due to cold audience", "mitigation": "Focus weeks 1-2 on engagement, not sales..." }
+  ],
+  "measurementPlan": {
+    "kpiTargets": { "CTR": "> 1.0%", "CPC": "< $1.50", "ROAS": "> 2.0x after learning" },
+    "evaluationWindow": "7-day rolling, full review at day 14 and 30",
+    "stopLossRules": ["Pause ad set if spend > 3x CPA with 0 conversions"],
+    "scalingRules": ["Increase 20% on ad sets with ROAS > 2.0x for 3+ days"]
+  }
+}
+```
+
+### Testing the consultant-style output
+The following test classes cover the upgrade:
+
+| Test class | What it covers |
+|---|---|
+| `PromptBuilderTest` | Consultant role injection, business facts, anti-generic rules, cold-start instructions, template intelligence fields |
+| `PromptBuilderInjectionTest` | All 5 context sections (Business, Performance, Creative, Trends, Intelligence) are present |
+| `ConsultantStrategyTest.AntiGenericValidation` | Rejects missing business name, missing industry, flat budget templates, missing sections |
+| `ConsultantStrategyTest.RichFallback` | Fallback contains executionRoadmap, setupChecklist, creativeStrategy, markdown, measurementPlan, risks |
+| `ConsultantStrategyTest.ColdStart` | first14DaysLearningPlan present, markdown mentions learning phase, conservative prompt language |
+| `ConsultantStrategyTest.BackwardCompatibility` | Original required fields still present, legacy normalize still works |
+
+Run tests:
+```bash
+cd strategy-service
+mvn test -pl .
+```
+

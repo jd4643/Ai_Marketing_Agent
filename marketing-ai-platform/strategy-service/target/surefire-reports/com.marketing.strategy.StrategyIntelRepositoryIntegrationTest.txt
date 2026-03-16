@@ -1,8 +1,8 @@
 -------------------------------------------------------------------------------
 Test set: com.marketing.strategy.StrategyIntelRepositoryIntegrationTest
 -------------------------------------------------------------------------------
-Tests run: 1, Failures: 0, Errors: 1, Skipped: 0, Time elapsed: 0.365 s <<< FAILURE! -- in com.marketing.strategy.StrategyIntelRepositoryIntegrationTest
-com.marketing.strategy.StrategyIntelRepositoryIntegrationTest -- Time elapsed: 0.365 s <<< ERROR!
+Tests run: 1, Failures: 0, Errors: 1, Skipped: 0, Time elapsed: 0.389 s <<< FAILURE! -- in com.marketing.strategy.StrategyIntelRepositoryIntegrationTest
+com.marketing.strategy.StrategyIntelRepositoryIntegrationTest -- Time elapsed: 0.389 s <<< ERROR!
 java.lang.IllegalStateException: Could not find a valid Docker environment. Please see logs and check configuration
 	at org.testcontainers.dockerclient.DockerClientProviderStrategy.lambda$getFirstValidStrategy$7(DockerClientProviderStrategy.java:277)
 	at java.base/java.util.Optional.orElseThrow(Optional.java:403)

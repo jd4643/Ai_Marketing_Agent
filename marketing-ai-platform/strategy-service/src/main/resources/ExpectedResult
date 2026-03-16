@@ -1,0 +1,283 @@
+{
+    "requestId": "660e8400-e29b-41d4-a716-446655440001",
+    "strategyVersion": "v2",
+    "platformBudgetSplit": {
+        "meta": 1200,
+        "google": 500,
+        "tiktok": 100,
+        "youtube": 200
+    },
+    "campaignPlan": [
+        {
+            "platform": "meta",
+            "dailyBudget": 40,
+            "objective": "Prospecting",
+            "targeting": "Women aged 25-45 interested in jewelry, fashion, and minimalist aesthetics",
+            "creativeHook": "Showcase how Acme's rings complement a modern, minimalist lifestyle"
+        },
+        {
+            "platform": "google",
+            "dailyBudget": 16.67,
+            "objective": "Prospecting",
+            "targeting": "Keywords related to affordable rings, minimalist style jewelry",
+            "creativeHook": "Highlight styles of engagement and fashion rings under $200"
+        },
+        {
+            "platform": "tiktok",
+            "dailyBudget": 3.33,
+            "objective": "Brand awareness",
+            "targeting": "Women 25-45, jewelry enthusiasts",
+            "creativeHook": "User-generated content showcasing the beauty and versatility of Acme's rings"
+        },
+        {
+            "platform": "youtube",
+            "dailyBudget": 6.67,
+            "objective": "Brand awareness",
+            "targeting": "Women 25-45 interested in jewelry and fashion",
+            "creativeHook": "Engaging storytelling that features rings in everyday life contexts"
+        }
+    ],
+    "funnelStrategy": "Mixed approach focusing on broad prospecting for new customers with retargeting ads to users who engage, ensuring a continuous flow through awareness, consideration, and conversion stages.",
+    "expectedCPL": "$15-$30 range for first-time conversions as brand awareness builds",
+    "expectedROAS": "2.0x to 3.0x range expected as funnel optimizes over time",
+    "reasoning": "The strategy utilizes a multi-platform approach targeting women aged 25-45, leveraging the current trend of minimalist jewelry. The funnel is designed to build brand awareness, generate leads, and retarget interested shoppers to improve conversion rates.",
+    "assumptions": [
+        "Meta platform will yield the best initial awareness and engagement",
+        "Target audience shows interest in affordable yet stylish jewelry",
+        "Campaign will drive some level of engagement and traffic, despite being a new brand"
+    ],
+    "businessSnapshot": {
+        "summary": "Acme Jewelry is a new brand focusing on stylish rings priced between $50-$200. Targeted at women aged 25-45 in the US, the brand aims to drive sales through an effective online strategy."
+    },
+    "marketAnalysis": {
+        "competitionContext": "The jewelry market is saturated but offers opportunities for unique, minimalist styles.",
+        "demandContext": "There is a growing trend towards affordable, stylish jewelry among women, especially those interested in minimalism.",
+        "buyingBehavior": "The target audience tends to research extensively online before purchasing jewelry, influenced by trends and social media.",
+        "seasonalConsiderations": "While jewelry purchases can be seasonal, focusing on holiday promotions like Valentine's Day or Mother's Day may enhance sales."
+    },
+    "customerPersona": {
+        "primaryBuyer": "Women aged 25-45 who appreciate minimalist aesthetics and affordable quality jewelry.",
+        "motivations": "Desire for stylish and elegant jewelry that fits everyday use without breaking the bank.",
+        "painPoints": "Difficulty finding high-quality rings at affordable prices that align with their style.",
+        "triggers": "Social media influence, trends in minimalist aesthetics, seasonal promotions."
+    },
+    "whyThisStrategy": {
+        "whyChosenPlatforms": "Meta is selected due to its advanced targeting capabilities, Google for search intent visibility, TikTok for its virality potential, and YouTube for engaging storytelling.",
+        "whyOthersLowerPriority": "Platforms like Pinterest are less effective initially due to low engagement with the brand and less visibility for new businesses."
+    },
+    "platformStrategy": [
+        {
+            "platform": "meta",
+            "whyChosen": "Best for audience targeting with visually engaging content.",
+            "campaignObjective": "Prospecting for new customers.",
+            "budgetAllocation": 1200,
+            "duration": "4 weeks",
+            "audienceType": "Broad targeted audience refined based on performance.",
+            "creativeFormat": "Images and short videos emphasizing product benefits.",
+            "successMetric": "Engagement rate and website traffic."
+        },
+        {
+            "platform": "google",
+            "whyChosen": "To capture high-intent searches for jewelry in the U.S.",
+            "campaignObjective": "Lead generation and brand awareness.",
+            "budgetAllocation": 500,
+            "duration": "4 weeks",
+            "audienceType": "Keyword searchers actively looking for rings.",
+            "creativeFormat": "Search ads promoting key rings priced under $200.",
+            "successMetric": "CTR and conversions from search traffic."
+        },
+        {
+            "platform": "tiktok",
+            "whyChosen": "To tap into viral trends and engage a younger audience.",
+            "campaignObjective": "Brand awareness.",
+            "budgetAllocation": 100,
+            "duration": "4 weeks",
+            "audienceType": "Women aged 25-45 engaging in jewelry content.",
+            "creativeFormat": "Short videos and challenges showcasing ring styles.",
+            "successMetric": "Video views and shares."
+        },
+        {
+            "platform": "youtube",
+            "whyChosen": "For storytelling that connects emotionally with the audience.",
+            "campaignObjective": "Increase brand visibility.",
+            "budgetAllocation": 200,
+            "duration": "4 weeks",
+            "audienceType": "Women interested in lifestyle and fashion.",
+            "creativeFormat": "Engaging video content showing real-life use of rings.",
+            "successMetric": "Engagement and subscriber growth."
+        }
+    ],
+    "campaignArchitecture": [
+        {
+            "platform": "meta",
+            "campaignThemes": [
+                "Minimalist Lifestyle",
+                "Everyday Elegance"
+            ],
+            "adGroupLogic": "Demographic and interest-based targeting.",
+            "keywordDirection": null,
+            "retargetingLogic": "Retarget users who engage with videos and website."
+        },
+        {
+            "platform": "google",
+            "campaignThemes": [
+                "Affordable Accessories",
+                "Minimalist Rings"
+            ],
+            "adGroupLogic": "Keyword targeting based on interest and search intent.",
+            "keywordDirection": "Broad match to capture various searches.",
+            "retargetingLogic": "Search retargeting for visitors who viewed rings."
+        },
+        {
+            "platform": "tiktok",
+            "campaignThemes": [
+                "Ring Styling",
+                "Trendy Minimalism"
+            ],
+            "adGroupLogic": "Interest-based targeting with viral content.",
+            "keywordDirection": null,
+            "retargetingLogic": null
+        },
+        {
+            "platform": "youtube",
+            "campaignThemes": [
+                "Storytelling Jewelry",
+                "Real-Life Use Cases"
+            ],
+            "adGroupLogic": "Interest in jewelry and lifestyle.",
+            "keywordDirection": null,
+            "retargetingLogic": "Video engagement retargeting."
+        }
+    ],
+    "creativeStrategy": {
+        "creativeAngles": [
+            "Problem-solution",
+            "Social proof",
+            "Benefit stack"
+        ],
+        "hooks": [
+            "Transform your look with affordability!",
+            "Jewelry for the modern woman, effortlessly."
+        ],
+        "messagingStyle": "Emphasis on empowerment and style fitting into everyday life.",
+        "contentTypes": [
+            "Images, videos, customer stories, user-generated content."
+        ],
+        "examples": [
+            "Videos showing rings styled with different outfits, before/after transformations."
+        ]
+    },
+    "creativesNeeded": [
+        {
+            "type": "Image ads",
+            "description": "Visually appealing images of rings worn by models.",
+            "quantity": 10,
+            "specs": "1080x1080 px, clear, high-quality visuals."
+        },
+        {
+            "type": "Video ads",
+            "description": "Short clips showcasing the versatility and style of rings.",
+            "quantity": 5,
+            "specs": "15-30 seconds, engaging storytelling."
+        },
+        {
+            "type": "Carousel ads",
+            "description": "Multiple images highlighting different rings.",
+            "quantity": 5,
+            "specs": "1080x1080 px per image, easy browsing."
+        }
+    ],
+    "executionRoadmap": {
+        "week1": "Launch campaigns on all platforms focusing on broad outreach with minimal targeting.",
+        "week2": "Continue monitoring performance; begin analyzing click-through rates and engagement.",
+        "week3": "Adjust targeting based on initial data, test creative variations on meta and Google.",
+        "week4": "Implement retargeting for engaged audience and evaluate overall performance across platforms.",
+        "launchFirst": "Begin campaigns on meta first for immediate brand awareness.",
+        "measureFirst": "Review metrics weekly focusing on engagement and CTR.",
+        "changeAfter": "After two weeks, re-evaluate ad spend based on platform performance."
+    },
+    "setupChecklist": [
+        {
+            "item": "Create Ad Accounts",
+            "details": "Set up accounts on Meta, Google, TikTok, YouTube.",
+            "priority": "High"
+        },
+        {
+            "item": "Design Creatives",
+            "details": "Gather and finalize images and video creatives.",
+            "priority": "High"
+        },
+        {
+            "item": "Setup Tracking",
+            "details": "Install tracking pixels for all platforms on the website.",
+            "priority": "High"
+        },
+        {
+            "item": "Define Target Audiences",
+            "details": "Outline specific audience profiles for targeting ads.",
+            "priority": "Medium"
+        },
+        {
+            "item": "Launch Campaigns",
+            "details": "Activate campaigns and observe initial performance.",
+            "priority": "High"
+        }
+    ],
+    "landingPageRecommendations": {
+        "pageType": "Product-focused landing page for rings",
+        "conversionElements": [
+            "Clear call-to-action buttons",
+            "Testimonials",
+            "High-quality images"
+        ],
+        "mustHave": [
+            "Mobile optimized layout",
+            "Easy navigation to product categories",
+            "Engaging headlines that promote minimalist aesthetic."
+        ]
+    },
+    "offerStrategy": {
+        "primaryOffer": "10% off your first purchase",
+        "cta": "Shop now and elevate your minimalist style!",
+        "urgencyTactic": "Limited time only - offer ends in 14 days!"
+    },
+    "measurementPlan": {
+        "kpiTargets": {
+            "Cost per Lead": "Monitor weekly for efficiency",
+            "Return on Ad Spend": "Track pre- and post-optimization."
+        },
+        "evaluationWindow": "Evaluate at the end of each month.",
+        "stopLossRules": [
+            "Pause any ad under 1% CTR after 7 days.",
+            "Pause any campaign with a CPL exceeding $30 without further data insight."
+        ],
+        "scalingRules": [
+            "Consider scaling campaigns with a decent engagement rate over 3% after 28 days.",
+            "Increase spend on high-performing creatives after 14 days."
+        ]
+    },
+    "risksAndMitigations": [
+        {
+            "risk": "Creative fatigue due to newness of brand.",
+            "mitigation": "Regularly refresh creatives every two weeks to ensure content remains engaging."
+        },
+        {
+            "risk": "Underperformance due to lack of brand recognition.",
+            "mitigation": "Focus on visually compelling creatives and social proof to build trust."
+        }
+    ],
+    "first14DaysLearningPlan": {
+        "dataToCollect": [
+            "Engagement rates on ads across all platforms",
+            "Click-through rates to the website",
+            "Initial conversion data on product interest"
+        ],
+        "decisionsToDefer": [
+            "Scale budgets until consistent performance metrics are established.",
+            "Adjust audience targeting until sufficient data is gathered."
+        ],
+        "testingPlan": "Test two variations of creatives on Meta and Google for the first two weeks; use split testing in campaigns.",
+        "expectedOutcome": "Establish baseline data regarding audience interaction and level of interest in product offerings."
+    },
+    "humanReadablePlanMarkdown": "### Execution Plan for Acme Jewelry\n\n#### Overview\n- **Business Name**: Acme Jewelry\n- **Industry**: Jewelry\n- **Product**: Affordable rings\n- **Target Audience**: Women aged 25-45\n- **Budget**: $2,000 monthly\n\n#### Platform Budget Split\n- Meta: $1,200\n- Google: $500\n- TikTok: $100\n- YouTube: $200\n\n#### Campaign Structure\n1. **Meta**\n   - Objective: Prospecting\n   - Hook: Showcase minimalist lifestyle\n\n2. **Google**\n   - Objective: Lead generation\n   - Hook: Highlight affordability\n\n3. **TikTok**\n   - Objective: Brand awareness through engaging video content\n\n4. **YouTube**\n   - Objective: Storytelling that connects emotionally\n\n#### Execution Plan\n- **Week 1**: Launch campaigns for broad outreach.\n- **Week 2**: Analyze engagement and click-through rates.\n- **Week 3**: Adjust targeting and test creative variations.\n- **Week 4**: Implement retargeting for engaged users and evaluate performance.\n\n#### Creative Strategy\n- Focus on problem-solution messaging.\n- Use social proof to build brand trust.\n\n#### Measurement Plan\n- Evaluate key performance metrics weekly to adjust accordingly.\n- Implement stop-loss rules for underperforming ads."
+}

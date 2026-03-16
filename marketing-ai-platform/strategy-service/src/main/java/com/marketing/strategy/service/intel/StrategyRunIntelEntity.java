@@ -4,6 +4,8 @@ import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -24,12 +26,15 @@ public class StrategyRunIntelEntity {
     private BigDecimal monthlyBudget;
     @Column(name = "chosen_template_key", nullable = false)
     private String chosenTemplateKey;
+    @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "decision_path_json", nullable = false, columnDefinition = "jsonb")
     private String decisionPathJson;
     @Column(name = "confidence_score", nullable = false)
     private Integer confidenceScore;
+    @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "score_breakdown_json", nullable = false, columnDefinition = "jsonb")
     private String scoreBreakdownJson;
+    @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "similarity_match_json", columnDefinition = "jsonb")
     private String similarityMatchJson;
     @Column(name = "created_at", nullable = false)

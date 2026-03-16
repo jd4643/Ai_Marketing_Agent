@@ -12,6 +12,8 @@ spring:
       hibernate.jdbc.time_zone: UTC
   flyway:
     enabled: true
+    baseline-on-migrate: true
+    baseline-version: 0
 management:
   endpoints:
     web:
