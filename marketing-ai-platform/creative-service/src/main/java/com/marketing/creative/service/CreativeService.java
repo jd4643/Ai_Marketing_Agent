@@ -12,18 +12,27 @@ public class CreativeService {
   Map<String,Object> business=business(req.businessId()); if(business.isEmpty()) throw new IllegalArgumentException("businessId not found");
   List<String> trends=req.trendsOverride()!=null&&!req.trendsOverride().isEmpty()?req.trendsOverride():trends((String)business.get("industry"));
   List<Map<String,Object>> winners=winners(req.businessId());
+  List<Map<String,Object>> assetWinnersList=assetWinners(req.businessId());
   String strategySummary=req.strategyRequestId()!=null?strategy(req.strategyRequestId()):"none";
   Map<String,Object> out;
-  try{out=openai(req,requestId,business,trends,winners,strategySummary);}catch(Exception e){
+  try{out=openai(req,requestId,business,trends,winners,strategySummary,assetWinnersList);}catch(Exception e){
     log.warn("OpenAI creative generation failed, using fallback: {}", e.getMessage());
     out=fallback(req,requestId,trends,business);
   }
   enrichConceptsForGeneration(out, req.platform(), req.format());
+  // Add winner signals metadata
+  if (!assetWinnersList.isEmpty()) {
+    out.put("basedOnWinners", true);
+    out.put("winnerSignalsUsed", assetWinnersList.size());
+  } else {
+    out.put("basedOnWinners", false);
+    out.put("winnerSignalsUsed", 0);
+  }
   storeCreative(req.businessId(),req.platform(),req.format(), ((List<Map<String,Object>>)out.get("creativeConcepts")).get(0).get("performanceAngle").toString(), ((List<Map<String,Object>>)out.get("creativeConcepts")).get(0).get("hook").toString());
   return out;
  }
- private Map<String,Object> openai(GenerateRequest req,UUID requestId,Map<String,Object> business,List<String> trends,List<Map<String,Object>> winners,String strategy) throws Exception {
-  String prompt = buildCreativeDirectorPrompt(req, business, trends, winners, strategy);
+ private Map<String,Object> openai(GenerateRequest req,UUID requestId,Map<String,Object> business,List<String> trends,List<Map<String,Object>> winners,String strategy,List<Map<String,Object>> assetWinners) throws Exception {
+  String prompt = buildCreativeDirectorPrompt(req, business, trends, winners, strategy, assetWinners);
   if(apiKey==null||apiKey.isBlank()) throw new IllegalStateException("OpenAI API key not configured");
   String json=om.writeValueAsString(Map.of("model",model,"response_format",Map.of("type","json_object"),"messages",List.of(Map.of("role","system","content",SYSTEM_PROMPT),Map.of("role","user","content",prompt))));
   Request r=new Request.Builder().url("https://api.openai.com/v1/chat/completions").addHeader("Authorization","Bearer "+apiKey).post(RequestBody.create(json,MediaType.get("application/json"))).build();
@@ -42,7 +51,7 @@ public class CreativeService {
    "Each aiImagePrompt must be a complete, visually descriptive generation prompt including scene, lighting, composition, mood, product placement, and style. " +
    "Each aiVideoPrompt must describe the video concept in enough detail to produce a 15-30 second ad.";
 
- private String buildCreativeDirectorPrompt(GenerateRequest req, Map<String,Object> business, List<String> trends, List<Map<String,Object>> winners, String strategy) {
+ private String buildCreativeDirectorPrompt(GenerateRequest req, Map<String,Object> business, List<String> trends, List<Map<String,Object>> winners, String strategy, List<Map<String,Object>> assetWinners) {
    StringBuilder sb = new StringBuilder();
    sb.append("## BUSINESS CONTEXT\n");
    sb.append("Business: ").append(business.get("businessName")).append("\n");
@@ -62,6 +71,20 @@ public class CreativeService {
      sb.append("## TOP PERFORMING CREATIVES\n");
      for (Map<String,Object> w : winners) sb.append("- hook: ").append(w.get("hook")).append(" | angle: ").append(w.get("angle")).append(" | score: ").append(w.get("score")).append("\n");
      sb.append("\n");
+   }
+
+   if (!assetWinners.isEmpty()) {
+     sb.append("## WINNING CREATIVE ASSETS (data-backed)\n");
+     sb.append("These assets have proven performance. Use their patterns as inspiration:\n");
+     for (Map<String,Object> aw : assetWinners) {
+       sb.append("- asset: ").append(aw.get("assetId")).append(" | platform: ").append(aw.get("platform"));
+       sb.append(" | ROAS: ").append(aw.get("avgRoas")).append(" | conversions: ").append(aw.get("conversions"));
+       if (aw.get("hook") != null) sb.append(" | hook: ").append(aw.get("hook"));
+       if (aw.get("visualStyle") != null) sb.append(" | style: ").append(aw.get("visualStyle"));
+       if (aw.get("emotionalAngle") != null) sb.append(" | angle: ").append(aw.get("emotionalAngle"));
+       sb.append("\n");
+     }
+     sb.append("Build on these winning patterns. Iterate and improve, don't copy.\n\n");
    }
 
    if (!"none".equals(strategy)) {
@@ -238,6 +261,39 @@ public class CreativeService {
  private Map<String,Object> business(UUID id){try(Connection c=ds.getConnection(); PreparedStatement ps=c.prepareStatement("SELECT business_name,industry,product,target_audience FROM business_profile WHERE id=?")){ps.setObject(1,id); ResultSet rs=ps.executeQuery(); if(rs.next()){ Map<String,Object> m=new LinkedHashMap<>(); m.put("businessName",rs.getString(1)); m.put("industry",rs.getString(2)); m.put("product",rs.getString(3)); m.put("targetAudience",rs.getString(4)); return m; }}catch(Exception e){throw new RuntimeException(e);} return Map.of();}
  private List<String> trends(String industry){List<String> out=new ArrayList<>(); try(Connection c=ds.getConnection(); PreparedStatement ps=c.prepareStatement("SELECT keyword FROM trends WHERE (industry=? OR industry IS NULL) AND captured_at>=? ORDER BY captured_at DESC LIMIT 10")){ps.setString(1,industry); ps.setTimestamp(2,Timestamp.from(Instant.now().minus(7,ChronoUnit.DAYS))); ResultSet rs=ps.executeQuery(); while(rs.next()) out.add(rs.getString(1));}catch(Exception e){throw new RuntimeException(e);} return out;}
  private List<Map<String,Object>> winners(UUID id){List<Map<String,Object>> out=new ArrayList<>(); try(Connection c=ds.getConnection(); PreparedStatement ps=c.prepareStatement("SELECT hook,angle,performance_score FROM creatives WHERE business_id=? ORDER BY performance_score DESC NULLS LAST LIMIT 5")){ps.setObject(1,id); ResultSet rs=ps.executeQuery(); while(rs.next()) out.add(Map.of("hook",rs.getString(1),"angle",rs.getString(2),"score",rs.getObject(3)));}catch(Exception e){throw new RuntimeException(e);} return out;}
+ private List<Map<String,Object>> assetWinners(UUID businessId){
+  List<Map<String,Object>> out=new ArrayList<>();
+  try(Connection c=ds.getConnection(); PreparedStatement ps=c.prepareStatement(
+    "SELECT cap.creative_asset_id, cap.platform, COALESCE(SUM(cap.impressions),0) as impressions, " +
+    "COALESCE(SUM(cap.clicks),0) as clicks, COALESCE(SUM(cap.conversions),0) as conversions, " +
+    "COALESCE(AVG(cap.roas),0) as avg_roas, ca.metadata_json " +
+    "FROM creative_asset_performance cap JOIN creative_assets ca ON ca.id=cap.creative_asset_id " +
+    "WHERE cap.business_id=? AND cap.recorded_at>=? " +
+    "GROUP BY cap.creative_asset_id, cap.platform, ca.metadata_json " +
+    "HAVING COALESCE(SUM(cap.impressions),0) >= 3000 AND COALESCE(AVG(cap.roas),0) >= 2.0 " +
+    "ORDER BY avg_roas DESC LIMIT 5")){
+   ps.setObject(1,businessId);
+   ps.setTimestamp(2,Timestamp.from(Instant.now().minus(30,ChronoUnit.DAYS)));
+   ResultSet rs=ps.executeQuery();
+   while(rs.next()){
+    Map<String,Object> m=new LinkedHashMap<>();
+    m.put("assetId",rs.getObject(1).toString());
+    m.put("platform",rs.getString(2));
+    m.put("impressions",rs.getLong(3));
+    m.put("clicks",rs.getLong(4));
+    m.put("conversions",rs.getLong(5));
+    m.put("avgRoas",rs.getBigDecimal(6));
+    String metaJson=rs.getString(7);
+    if(metaJson!=null&&!metaJson.isBlank()){
+     try{Map<String,Object> meta=om.readValue(metaJson,new TypeReference<>(){});
+      m.put("hook",meta.get("hook")); m.put("visualStyle",meta.get("visualStyle")); m.put("emotionalAngle",meta.get("emotionalAngle"));
+     }catch(Exception ignored){}
+    }
+    out.add(m);
+   }
+  }catch(Exception e){log.warn("Failed to query asset winners: {}",e.getMessage());}
+  return out;
+ }
  private String strategy(UUID rid){ try(Connection c=ds.getConnection(); PreparedStatement ps=c.prepareStatement("SELECT response_json::text FROM strategy_history WHERE request_id=? ORDER BY created_at DESC LIMIT 1")){ps.setObject(1,rid); ResultSet rs=ps.executeQuery(); if(rs.next()) return rs.getString(1);}catch(Exception e){throw new RuntimeException(e);} return "none"; }
  private void storeCreative(UUID businessId,String platform,String format,String angle,String hook){ try(Connection c=ds.getConnection(); PreparedStatement ps=c.prepareStatement("INSERT INTO creatives(id,business_id,platform,format,angle,hook,performance_score,created_at) VALUES (?,?,?,?,?,?,NULL,?)")){ps.setObject(1,UUID.randomUUID());ps.setObject(2,businessId);ps.setString(3,platform);ps.setString(4,format);ps.setString(5,angle);ps.setString(6,hook);ps.setTimestamp(7,Timestamp.from(Instant.now())); ps.executeUpdate();}catch(Exception e){throw new RuntimeException(e);} }
 }

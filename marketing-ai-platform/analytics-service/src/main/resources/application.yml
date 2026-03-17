@@ -26,3 +26,11 @@ openai:
   api-key: ${OPENAI_API_KEY:}
   model: ${OPENAI_MODEL:gpt-4o-mini}
   timeout-seconds: ${OPENAI_TIMEOUT_SECONDS:15}
+creative:
+  winner:
+    min-impressions: ${CREATIVE_WINNER_MIN_IMPRESSIONS:3000}
+    min-clicks: ${CREATIVE_WINNER_MIN_CLICKS:100}
+    min-conversions: ${CREATIVE_WINNER_MIN_CONVERSIONS:3}
+    min-roas: ${CREATIVE_WINNER_MIN_ROAS:2.0}
+  weak:
+    max-roas: ${CREATIVE_WEAK_MAX_ROAS:0.8}

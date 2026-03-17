@@ -466,6 +466,213 @@ def generate_creative_assets(req: CreativeAssetRequest, request: Request):
     }
 
 
+class FromWinnerRequest(BaseModel):
+    winnerAssetId: str
+    businessId: str
+    variationType: str = Field(default="iteration", pattern=r"^(iteration|remix|opposite)$")
+    assetType: Optional[str] = Field(None, pattern=r"^(image|video|carousel)$")
+    platform: Optional[str] = Field(None, pattern=r"^(meta|google|tiktok|youtube)$")
+    count: int = Field(default=1, ge=1, le=4)
+    size: Optional[str] = "1024x1024"
+
+
+def _query_winner_asset(asset_id: str) -> Optional[dict]:
+    """Fetch a creative asset and its performance data for winner-based generation."""
+    with _get_connection() as conn:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                """SELECT ca.id, ca.business_id, ca.asset_type, ca.platform, ca.prompt_text,
+                          ca.metadata_json, ca.trend_context_json,
+                          COALESCE(SUM(cap.impressions),0) as total_impressions,
+                          COALESCE(SUM(cap.clicks),0) as total_clicks,
+                          COALESCE(SUM(cap.conversions),0) as total_conversions,
+                          COALESCE(AVG(cap.roas),0) as avg_roas
+                   FROM creative_assets ca
+                   LEFT JOIN creative_asset_performance cap ON cap.creative_asset_id = ca.id
+                   WHERE ca.id = %s
+                   GROUP BY ca.id""",
+                (asset_id,),
+            )
+            row = cur.fetchone()
+            return dict(row) if row else None
+
+
+def _build_variation_prompt(winner: dict, variation_type: str, business_info: Optional[dict]) -> str:
+    """Build a prompt that creates a variation of a winning asset."""
+    original_prompt = winner.get("prompt_text", "")
+    metadata = winner.get("metadata_json") or {}
+    if isinstance(metadata, str):
+        import json as _json
+        metadata = _json.loads(metadata)
+
+    parts: list[str] = []
+
+    if variation_type == "iteration":
+        parts.append("Create an improved iteration of this winning ad creative.")
+        parts.append(f"Original concept: {original_prompt}")
+        if metadata.get("hook"):
+            parts.append(f"Winning hook pattern: {metadata['hook']}")
+        if metadata.get("visualStyle"):
+            parts.append(f"Keep visual style: {metadata['visualStyle']}")
+        if metadata.get("emotionalAngle"):
+            parts.append(f"Keep emotional angle: {metadata['emotionalAngle']}")
+        parts.append("Enhance and refine while keeping the core winning elements.")
+
+    elif variation_type == "remix":
+        parts.append("Create a remixed variation of this successful ad creative with a fresh take.")
+        parts.append(f"Original concept: {original_prompt}")
+        if metadata.get("hook"):
+            parts.append(f"Original hook: {metadata['hook']} — create a new hook with similar energy")
+        if metadata.get("visualStyle"):
+            parts.append(f"Original style: {metadata['visualStyle']} — try a complementary style")
+        parts.append("Keep what works but bring fresh creative energy.")
+
+    elif variation_type == "opposite":
+        parts.append("Create a contrasting version of this ad creative to test against the original.")
+        parts.append(f"Original concept: {original_prompt}")
+        if metadata.get("visualStyle"):
+            style_opposites = {"UGC": "editorial", "minimal": "bold-graphic", "bold-graphic": "minimal",
+                               "lifestyle": "studio", "editorial": "UGC"}
+            opposite_style = style_opposites.get(metadata["visualStyle"], "contrasting")
+            parts.append(f"Use contrasting visual style: {opposite_style}")
+        parts.append("Create the opposite approach while targeting the same audience.")
+
+    if business_info:
+        if business_info.get("product"):
+            parts.append(f"Product: {business_info['product']}")
+        if business_info.get("industry"):
+            parts.append(f"Industry: {business_info['industry']}")
+
+    perf = []
+    if winner.get("avg_roas"):
+        perf.append(f"ROAS: {winner['avg_roas']:.2f}")
+    if winner.get("total_conversions"):
+        perf.append(f"Conversions: {winner['total_conversions']}")
+    if perf:
+        parts.append(f"Original performance: {', '.join(perf)}")
+
+    parts.append("Professional advertising photography. Clean, brand-safe, commercial quality.")
+    return " | ".join(parts)
+
+
+@app.post("/generate/creative-assets/from-winner")
+def generate_from_winner(req: FromWinnerRequest, request: Request):
+    """Generate new creative assets based on a winning asset's DNA."""
+    request_id = request.state.request_id
+    logger.info(
+        "Generate from winner winnerAssetId=%s variationType=%s count=%d",
+        req.winnerAssetId, req.variationType, req.count,
+        extra={"request_id": request_id},
+    )
+
+    # Fetch winner asset with performance data
+    winner = _query_winner_asset(req.winnerAssetId)
+    if not winner:
+        return JSONResponse(status_code=404, content={
+            "requestId": request_id,
+            "error": "NOT_FOUND",
+            "message": f"Winner asset not found: {req.winnerAssetId}",
+            "details": {},
+        })
+
+    # Verify business ownership
+    if str(winner["business_id"]) != req.businessId:
+        return JSONResponse(status_code=400, content={
+            "requestId": request_id,
+            "error": "BAD_REQUEST",
+            "message": "Asset does not belong to the specified business",
+            "details": {},
+        })
+
+    business_info = _fetch_business(req.businessId)
+    asset_type = req.assetType or winner.get("asset_type", "image")
+    platform = req.platform or winner.get("platform")
+
+    # Build variation prompt from winner DNA
+    final_prompt = _build_variation_prompt(winner, req.variationType, business_info)
+
+    # Preserve winner metadata with variation context
+    winner_metadata = winner.get("metadata_json") or {}
+    if isinstance(winner_metadata, str):
+        winner_metadata = json.loads(winner_metadata)
+    meta_dict = dict(winner_metadata)
+    meta_dict["basedOnWinnerId"] = req.winnerAssetId
+    meta_dict["variationType"] = req.variationType
+    meta_dict["originalPrompt"] = winner.get("prompt_text", "")
+
+    trend_dict = winner.get("trend_context_json")
+    if isinstance(trend_dict, str):
+        trend_dict = json.loads(trend_dict)
+
+    assets_response = []
+    overall_status = "SUCCESS"
+    use_real_provider = _is_provider_configured() and asset_type == "image"
+
+    for i in range(req.count):
+        asset_id = str(uuid.uuid4())
+        provider = "STUB"
+        provider_asset_id = None
+        asset_url = None
+        thumbnail_url = None
+        status = "STUBBED"
+
+        if use_real_provider:
+            try:
+                results = _call_openai_image(final_prompt, req.size or "1024x1024", 1)
+                if results:
+                    provider = "OPENAI"
+                    asset_url = results[0].get("url")
+                    thumbnail_url = asset_url
+                    status = "SUCCESS"
+                else:
+                    status = "FAILED"
+                    overall_status = "FAILED"
+            except Exception as e:
+                logger.error("OpenAI image generation failed: %s", str(e), extra={"request_id": request_id})
+                status = "FAILED"
+                overall_status = "FAILED"
+        else:
+            if overall_status != "FAILED":
+                overall_status = "STUBBED"
+
+        _persist_asset(
+            asset_id=asset_id,
+            business_id=req.businessId,
+            creative_id=None,
+            strategy_request_id=None,
+            asset_type=asset_type,
+            platform=platform,
+            prompt_text=final_prompt,
+            provider=provider,
+            provider_asset_id=provider_asset_id,
+            asset_url=asset_url,
+            thumbnail_url=thumbnail_url,
+            status=status,
+            trend_context=trend_dict if isinstance(trend_dict, dict) else None,
+            metadata=meta_dict,
+        )
+
+        assets_response.append({
+            "assetId": asset_id,
+            "assetType": asset_type,
+            "status": status,
+            "url": asset_url,
+            "thumbnailUrl": thumbnail_url,
+            "provider": provider,
+            "promptUsed": final_prompt,
+            "basedOnWinnerId": req.winnerAssetId,
+            "variationType": req.variationType,
+        })
+
+    return {
+        "requestId": request_id,
+        "status": overall_status,
+        "winnerAssetId": req.winnerAssetId,
+        "variationType": req.variationType,
+        "assets": assets_response,
+    }
+
+
 @app.get("/generate/assets")
 def list_assets(
     businessId: str = Query(...),

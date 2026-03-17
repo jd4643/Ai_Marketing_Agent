@@ -77,6 +77,15 @@ public class IntelPromptBuilder {
         }
         sb.append("\n");
 
+        // ─── C2) CREATIVE ASSET WINNERS (data-backed) ──────────────────
+        if (perfSummary.contains("assetWinners=[{")) {
+            sb.append("=== C2) CREATIVE ASSET WINNERS (performance-proven) ===\n");
+            sb.append("These creative assets have proven ROAS >= 2.0 and significant volume.\n");
+            sb.append("Use these signals to recommend creative direction and scaling decisions.\n");
+            sb.append(perfSummary.substring(perfSummary.indexOf("assetWinners="))).append("\n");
+            sb.append("Recommendation: Create iterations of winning assets and scale budget toward winning platforms.\n\n");
+        }
+
         // ─── D) TREND SIGNALS (last 7 days) ────────────────────────────
         sb.append("=== D) TREND SIGNALS (last 7 days) ===\n");
         if (trends == null || trends.isEmpty()) {

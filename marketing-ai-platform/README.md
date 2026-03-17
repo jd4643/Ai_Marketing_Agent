@@ -625,3 +625,176 @@ Generated asset records preserve:
 
 This enables future performance tracking per asset, allowing the platform to learn which creative concepts, prompts, and trend directions produce the best-performing ads.
 
+---
+
+## Creative Performance Intelligence (Phase 3)
+
+### Overview
+Phase 3 closes the feedback loop: the platform now **tracks performance at the individual creative asset level**, automatically **detects winners**, and **feeds winning signals back** into both strategy and creative generation. This creates a self-improving cycle:
+
+```
+Generate Assets → Run Ads → Ingest Performance → Detect Winners → Generate Smarter Assets
+```
+
+### How Winner Detection Works
+Each creative asset is classified into one of four categories based on configurable thresholds:
+
+| Classification | Criteria |
+|---|---|
+| **WINNER** | ≥ 3000 impressions AND ≥ 100 clicks AND ≥ 3 conversions AND ≥ 2.0 ROAS |
+| **TESTING** | ≥ 3000 impressions but does not meet all WINNER thresholds |
+| **WEAK** | ≥ 3000 impressions AND ROAS ≤ 0.8 |
+| **INSUFFICIENT_DATA** | < 3000 impressions (not enough data to classify) |
+
+Thresholds are configurable via environment variables (see below).
+
+### New Endpoints
+
+#### 1. Ingest Asset-Level Performance
+```bash
+curl -X POST localhost:8080/analytics/creative-assets/metrics/ingest \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "creativeAssetId": "<UUID from /generate/creative-assets>",
+    "businessId": "<businessId>",
+    "platform": "meta",
+    "impressions": 5000,
+    "clicks": 220,
+    "conversions": 12,
+    "spend": 125.50,
+    "revenue": 620.00,
+    "ctr": 0.044,
+    "cpc": 0.57,
+    "cpa": 10.46,
+    "roas": 4.94,
+    "recordedAt": "2026-01-15T12:00:00Z"
+  }'
+```
+Response: `201 Created` with the saved performance record.
+
+#### 2. Asset Performance Summary
+```bash
+curl 'localhost:8080/analytics/creative-assets/summary?businessId=<UUID>&days=30'
+```
+Returns aggregated metrics grouped by asset and platform (total impressions, clicks, conversions, spend, revenue, average CTR/CPC/CPA/ROAS).
+
+#### 3. Winner Detection
+```bash
+curl 'localhost:8080/analytics/creative-assets/winners?businessId=<UUID>&days=30&limit=10'
+```
+Returns classified assets with their status (`WINNER`, `TESTING`, `WEAK`, `INSUFFICIENT_DATA`), metrics, and the thresholds used for classification.
+
+#### 4. Performance Insights
+```bash
+curl 'localhost:8080/analytics/creative-assets/insights?businessId=<UUID>&days=30'
+```
+Returns an insights report including:
+- Count breakdown by classification (winners, testing, weak, insufficient)
+- Best asset ID and its ROAS
+- Overall ROAS and total spend/revenue
+- Actionable recommendations array (e.g., "Scale budget on 3 winning assets", "Pause 2 weak assets with ROAS ≤ 0.8")
+
+#### 5. Generate Variation from Winner
+```bash
+curl -X POST localhost:8080/generate/creative-assets/from-winner \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "winnerAssetId": "<UUID of a winning asset>",
+    "businessId": "<businessId>",
+    "variationType": "iteration",
+    "assetType": "image",
+    "platform": "meta",
+    "count": 3,
+    "size": "1024x1024"
+  }'
+```
+
+**Variation types:**
+| Type | Behavior |
+|---|---|
+| `iteration` | Keeps winning elements (hook, style, angle) and iterates on them |
+| `remix` | Creates a fresh interpretation using winning signals as inspiration |
+| `opposite` | Tests a contrasting approach (e.g., UGC → editorial, minimal → bold-graphic) |
+
+Response includes `winner_provenance` with the source asset ID, variation type, and original winning metrics.
+
+### Winner-Aware Generation
+Once assets have performance data, the platform automatically uses winning signals:
+
+**Creative Service (`POST /creative/generate`):**
+- Queries asset winners (≥ 3000 impressions, ≥ 2.0 ROAS)
+- Injects winning hooks, visual styles, and emotional angles into the creative director prompt
+- Response includes `basedOnWinners: true` and `winnerSignalsUsed: N` when winners influenced generation
+
+**Strategy Service (`POST /strategy/generate`):**
+- Queries asset winners and injects them into the performance summary
+- The intelligence prompt includes a "CREATIVE ASSET WINNERS" section (C2) with performance-proven signals
+- Response includes `winnerInsights` array (per-winner breakdown) and `recommendedNextCreativeMoves` (actionable next steps)
+
+### Database: creative_asset_performance Table
+Flyway migration V4 creates the performance tracking table:
+
+| Column | Type | Description |
+|---|---|---|
+| `id` | UUID PK | Performance record identifier |
+| `creative_asset_id` | UUID FK | Links to creative_assets |
+| `business_id` | UUID FK | Links to business_profile |
+| `platform` | TEXT | Platform (meta, google, tiktok, youtube) |
+| `impressions` | BIGINT | Total impressions |
+| `clicks` | BIGINT | Total clicks |
+| `conversions` | BIGINT | Total conversions |
+| `spend` | NUMERIC | Total spend |
+| `revenue` | NUMERIC | Total revenue |
+| `ctr` | NUMERIC | Click-through rate |
+| `cpc` | NUMERIC | Cost per click |
+| `cpa` | NUMERIC | Cost per acquisition |
+| `roas` | NUMERIC | Return on ad spend |
+| `recorded_at` | TIMESTAMP | When the metric was recorded |
+| `created_at` | TIMESTAMP | Auto-set insertion time |
+
+Indexes on `creative_asset_id`, `business_id`, `platform`, and `recorded_at`.
+
+### Environment Variables (Phase 3)
+Add to `infra/.env`:
+```bash
+CREATIVE_WINNER_MIN_IMPRESSIONS=3000
+CREATIVE_WINNER_MIN_CLICKS=100
+CREATIVE_WINNER_MIN_CONVERSIONS=3
+CREATIVE_WINNER_MIN_ROAS=2.0
+CREATIVE_WEAK_MAX_ROAS=0.8
+```
+
+### The Learning Loop in Practice
+
+**Cold start (no performance data):**
+- Strategy and creative generation work normally using business profile, trends, and intelligence engine
+- All generated assets are persisted with full metadata for future tracking
+
+**After running ads and ingesting metrics:**
+1. Call `POST /analytics/creative-assets/metrics/ingest` with ad platform data (daily or on-demand)
+2. Check `GET /analytics/creative-assets/winners` to see which assets are performing
+3. Subsequent `POST /strategy/generate` calls automatically incorporate winner signals
+4. Subsequent `POST /creative/generate` calls reference winning hooks and styles
+5. Use `POST /generate/creative-assets/from-winner` to create variations of proven winners
+
+**Over time, the platform:**
+- Identifies which hooks, visual styles, and emotional angles work for each business
+- Generates increasingly targeted creative concepts based on proven winners
+- Provides data-driven strategy recommendations that reference actual creative performance
+- Reduces creative waste by scaling winners and pausing weak assets
+
+### Testing Phase 3
+```bash
+# Analytics service (5 new tests + 2 existing)
+cd analytics-service && mvn test
+
+# Generation service (8 new tests + 18 existing)
+cd generation-service && python -m pytest test_app.py -v
+
+# Creative service (regression — no new tests needed)
+cd creative-service && mvn test
+
+# Strategy service (3 new integration tests)
+cd strategy-service && mvn test -Dtest=AssetWinnerIntegrationTest
+```
+

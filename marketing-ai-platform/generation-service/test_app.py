@@ -289,5 +289,157 @@ class TestLegacyEndpoint(unittest.TestCase):
         self.assertEqual(resp.json()["status"], "STUBBED")
 
 
+class TestFromWinnerValidation(unittest.TestCase):
+    def test_missing_winner_asset_id(self):
+        resp = client.post("/generate/creative-assets/from-winner", json={
+            "businessId": "550e8400-e29b-41d4-a716-446655440000",
+        })
+        self.assertEqual(resp.status_code, 422)
+
+    def test_invalid_variation_type(self):
+        resp = client.post("/generate/creative-assets/from-winner", json={
+            "winnerAssetId": "550e8400-e29b-41d4-a716-446655440000",
+            "businessId": "660e8400-e29b-41d4-a716-446655440000",
+            "variationType": "invalid",
+        })
+        self.assertEqual(resp.status_code, 422)
+
+
+class TestFromWinnerEndpoint(unittest.TestCase):
+    @patch("app._fetch_business")
+    @patch("app._persist_asset")
+    @patch("app._query_winner_asset")
+    @patch("app._is_provider_configured", return_value=False)
+    def test_stubbed_from_winner(self, mock_provider, mock_winner, mock_persist, mock_biz):
+        winner_id = "550e8400-e29b-41d4-a716-446655440000"
+        business_id = "660e8400-e29b-41d4-a716-446655440000"
+        mock_winner.return_value = {
+            "id": winner_id,
+            "business_id": business_id,
+            "asset_type": "image",
+            "platform": "meta",
+            "prompt_text": "original winning prompt",
+            "metadata_json": {"hook": "Stop scrolling", "visualStyle": "UGC", "emotionalAngle": "curiosity"},
+            "trend_context_json": None,
+            "total_impressions": 5000,
+            "total_clicks": 200,
+            "total_conversions": 10,
+            "avg_roas": 3.5,
+        }
+        mock_biz.return_value = {
+            "business_name": "TestBiz",
+            "industry": "jewelry",
+            "product": "rings",
+            "price_range": "mid",
+            "location": "NYC",
+            "target_audience": "women 25-45",
+        }
+        resp = client.post("/generate/creative-assets/from-winner", json={
+            "winnerAssetId": winner_id,
+            "businessId": business_id,
+            "variationType": "iteration",
+        })
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertEqual(data["status"], "STUBBED")
+        self.assertEqual(data["winnerAssetId"], winner_id)
+        self.assertEqual(data["variationType"], "iteration")
+        self.assertEqual(len(data["assets"]), 1)
+        asset = data["assets"][0]
+        self.assertEqual(asset["basedOnWinnerId"], winner_id)
+        self.assertIn("winning", asset["promptUsed"].lower())
+        mock_persist.assert_called_once()
+
+    @patch("app._query_winner_asset")
+    def test_winner_not_found(self, mock_winner):
+        mock_winner.return_value = None
+        resp = client.post("/generate/creative-assets/from-winner", json={
+            "winnerAssetId": "550e8400-e29b-41d4-a716-446655440000",
+            "businessId": "660e8400-e29b-41d4-a716-446655440000",
+        })
+        self.assertEqual(resp.status_code, 404)
+
+    @patch("app._query_winner_asset")
+    def test_business_mismatch(self, mock_winner):
+        mock_winner.return_value = {
+            "id": "550e8400-e29b-41d4-a716-446655440000",
+            "business_id": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+            "asset_type": "image",
+            "platform": "meta",
+            "prompt_text": "test",
+            "metadata_json": None,
+            "trend_context_json": None,
+            "total_impressions": 0,
+            "total_clicks": 0,
+            "total_conversions": 0,
+            "avg_roas": 0,
+        }
+        resp = client.post("/generate/creative-assets/from-winner", json={
+            "winnerAssetId": "550e8400-e29b-41d4-a716-446655440000",
+            "businessId": "660e8400-e29b-41d4-a716-446655440000",
+        })
+        self.assertEqual(resp.status_code, 400)
+
+    @patch("app._fetch_business")
+    @patch("app._persist_asset")
+    @patch("app._query_winner_asset")
+    @patch("app._is_provider_configured", return_value=False)
+    def test_remix_variation(self, mock_provider, mock_winner, mock_persist, mock_biz):
+        winner_id = "550e8400-e29b-41d4-a716-446655440000"
+        business_id = "660e8400-e29b-41d4-a716-446655440000"
+        mock_winner.return_value = {
+            "id": winner_id,
+            "business_id": business_id,
+            "asset_type": "image",
+            "platform": "meta",
+            "prompt_text": "original prompt",
+            "metadata_json": {"hook": "Try this", "visualStyle": "minimal"},
+            "trend_context_json": None,
+            "total_impressions": 3000,
+            "total_clicks": 150,
+            "total_conversions": 5,
+            "avg_roas": 2.5,
+        }
+        mock_biz.return_value = {"business_name": "TestBiz", "industry": "fashion", "product": "bags"}
+        resp = client.post("/generate/creative-assets/from-winner", json={
+            "winnerAssetId": winner_id,
+            "businessId": business_id,
+            "variationType": "remix",
+            "count": 2,
+        })
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertEqual(len(data["assets"]), 2)
+        self.assertEqual(data["variationType"], "remix")
+        self.assertIn("remix", data["assets"][0]["promptUsed"].lower())
+
+
+class TestVariationPromptBuilder(unittest.TestCase):
+    def test_iteration_prompt(self):
+        from app import _build_variation_prompt
+        winner = {
+            "prompt_text": "original product shot",
+            "metadata_json": {"hook": "Stop scrolling", "visualStyle": "UGC", "emotionalAngle": "curiosity"},
+            "avg_roas": 3.5,
+            "total_conversions": 10,
+        }
+        result = _build_variation_prompt(winner, "iteration", {"product": "rings", "industry": "jewelry"})
+        self.assertIn("iteration", result.lower())
+        self.assertIn("Stop scrolling", result)
+        self.assertIn("UGC", result)
+
+    def test_opposite_prompt(self):
+        from app import _build_variation_prompt
+        winner = {
+            "prompt_text": "original",
+            "metadata_json": {"visualStyle": "UGC"},
+            "avg_roas": 2.0,
+            "total_conversions": 5,
+        }
+        result = _build_variation_prompt(winner, "opposite", None)
+        self.assertIn("contrasting", result.lower())
+        self.assertIn("editorial", result)
+
+
 if __name__ == "__main__":
     unittest.main()
