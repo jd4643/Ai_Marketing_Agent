@@ -11,6 +11,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.marketing.analytics.repo.CampaignMetricRepository;
 import com.marketing.analytics.repo.CreativeAssetPerformanceRepository;
+import com.marketing.analytics.service.AdPlatformIntegrationService;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
@@ -27,6 +28,7 @@ class CreativeAssetPerformanceControllerTest {
     @Autowired MockMvc mvc;
     @MockBean CampaignMetricRepository campaignRepo;
     @MockBean CreativeAssetPerformanceRepository repo;
+    @MockBean AdPlatformIntegrationService integrationService;
 
     @Test void ingestValidation() throws Exception {
         mvc.perform(post("/analytics/creative-assets/metrics/ingest")

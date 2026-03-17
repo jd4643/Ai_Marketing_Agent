@@ -18,7 +18,7 @@ Production-oriented monorepo implementing a multi-service marketing AI platform 
 - `api-gateway` (8080): routing, request-id propagation, CORS, per-IP rate limit.
 - `strategy-service` (8081): strategy generation, deterministic rules, OpenAI JSON response + fallback, history persistence.
 - `creative-service` (8082): creative blueprints using trends/strategy/winners.
-- `analytics-service` (8083): metrics ingest + summary; owns Flyway migration.
+- `analytics-service` (8083): metrics ingest + summary; owns Flyway migration; Meta Ads API integration (read-only sync, asset mapping, derived performance).
 - `trend-service` (8091): pytrends ingestion, scheduled refresh, trends read API.
 - `generation-service` (8092): creative asset generation with DB persistence, prompt builder, DALL-E integration (stubbed by default).
 
@@ -796,5 +796,135 @@ cd creative-service && mvn test
 
 # Strategy service (3 new integration tests)
 cd strategy-service && mvn test -Dtest=AssetWinnerIntegrationTest
+```
+
+---
+
+## Meta Ads API Integration (Phase 4)
+
+### Overview
+Phase 4 adds the first **real ad-platform integration**: Meta Ads API (read-only). The platform now connects to live Meta ad accounts, syncs ad metadata and performance insights, maps external ads to internal creative assets, and feeds real performance data into the existing winner detection loop.
+
+This is a **read-only** integration — no campaign creation, edits, publishing, or budget changes on Meta.
+
+```
+Connect Meta Account → Sync Ads + Insights → Map to Internal Assets → Derive Performance → Feed Learning Loop
+```
+
+### Architecture
+- **Platform abstraction layer**: Interfaces (`AdPlatformSyncClient`, `AdPlatformInsightNormalizer`, `AdPlatformAssetMapper`) enable future Google/TikTok integrations
+- **Token security**: AES-256-GCM encryption at rest via `PLATFORM_TOKEN_ENCRYPTION_KEY` (optional for local dev)
+- **Meta Marketing API v21.0**: Configurable API version and base URL
+- **Retry + backoff**: Exponential backoff with jitter (1s base, 3 max retries) on 429/5xx
+- **Scheduled sync**: Background sync every hour for all active connections (configurable)
+- **Automatic performance bridging**: `derivePerformance()` writes to `creative_asset_performance`, feeding the existing winner detection in both strategy-service and creative-service
+
+### New Endpoints
+
+All endpoints are routed through the API gateway at `/analytics/integrations/meta/*`.
+
+#### 1. Connect Meta Ad Account
+```bash
+curl -X POST localhost:8080/analytics/integrations/meta/connect \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "businessId": "<UUID>",
+    "metaAdAccountId": "act_123456789",
+    "connectionName": "Main Meta Account",
+    "accessToken": "<META_ACCESS_TOKEN>",
+    "metaBusinessId": "optional_meta_biz_id"
+  }'
+```
+Response (`201 Created`):
+```json
+{
+  "requestId": "...",
+  "connectionId": "UUID",
+  "platform": "META",
+  "status": "ACTIVE",
+  "externalAccountId": "act_123456789"
+}
+```
+
+#### 2. List Connections
+```bash
+curl 'localhost:8080/analytics/integrations/meta?businessId=<UUID>'
+```
+
+#### 3. Disconnect
+```bash
+curl -X POST localhost:8080/analytics/integrations/meta/<connectionId>/disconnect
+```
+
+#### 4. Trigger Sync
+```bash
+curl -X POST localhost:8080/analytics/integrations/meta/<connectionId>/sync
+```
+Returns a summary: ads synced, insights synced, assets mapped, performance records derived.
+
+#### 5. Sync Status
+```bash
+curl 'localhost:8080/analytics/integrations/meta/<connectionId>/sync-status'
+```
+Returns: connection status, last synced timestamp, ad count, mapped asset count.
+
+#### 6. Insights Summary
+```bash
+curl 'localhost:8080/analytics/integrations/meta/<connectionId>/insights?days=30'
+```
+Returns: aggregated spend/impressions/clicks/conversions/revenue, top campaigns, top ads by ROAS, mapped vs unmapped count, winning hooks, and recommendations.
+
+### How It Feeds the Learning Loop
+The `sync` operation runs this pipeline:
+1. **syncAds**: Fetches all ads from Meta, upserts into `ad_platform_ads`
+2. **syncInsights**: Fetches daily insights, normalizes conversions/revenue, stores in `ad_platform_insights`
+3. **mapCreativeAssets**: Maps external Meta ads to internal `creative_assets` using 3-tier matching (metadata match → name match → creative metadata similarity)
+4. **derivePerformance**: For each mapped asset, aggregates Meta insights and writes to `creative_asset_performance`
+
+Since strategy-service and creative-service already query `creative_asset_performance` for winner detection, **Meta performance data automatically flows into the learning loop** without any changes to those services.
+
+### Database Tables (V5 Migration)
+| Table | Purpose |
+|---|---|
+| `ad_platform_connections` | Multi-platform connection credentials + status |
+| `ad_platform_ads` | Synced ad metadata from external platforms |
+| `ad_platform_insights` | Daily performance metrics from external platforms |
+| `creative_asset_platform_mapping` | Links external ads to internal creative assets |
+
+### Creative Asset Mapping
+The mapper uses 3-tier matching with confidence scoring:
+| Method | Confidence | Logic |
+|---|---|---|
+| `METADATA_MATCH` | 0.9 | Asset `conceptName` appears in Meta ad name |
+| `NAME_MATCH` | 0.5–0.8 | Hook words from asset metadata match proportionally |
+| `METADATA_MATCH` (secondary) | 0.4–0.6 | Headline/CTA from asset appears in creative name |
+
+Minimum threshold: 0.3 confidence to create a mapping. Below that, the ad remains unmapped.
+
+### Environment Variables (Phase 4)
+Add to `infra/.env`:
+```bash
+META_API_BASE_URL=https://graph.facebook.com
+META_API_VERSION=v21.0
+META_API_TIMEOUT_SECONDS=30
+META_SYNC_LOOKBACK_DAYS=30
+META_SYNC_INTERVAL_MS=3600000
+META_SYNC_INITIAL_DELAY_MS=60000
+PLATFORM_TOKEN_ENCRYPTION_KEY=        # base64-encoded 32-byte key; leave empty for local dev (plaintext storage)
+```
+
+Generate an encryption key:
+```bash
+openssl rand -base64 32
+```
+
+### Testing Phase 4
+```bash
+cd analytics-service && mvn test
+# Runs 32 tests including:
+#   AdPlatformIntegrationControllerTest — connect validation, list, disconnect, sync, insights
+#   TokenEncryptorTest — encrypt/decrypt round-trip, plaintext fallback, null handling, IV uniqueness
+#   MetaInsightNormalizerTest — basic normalization, conversion extraction, ROAS computation
+#   MetaCreativeAssetMapperTest — metadata match, name match, threshold filtering, best-match selection
 ```
 
