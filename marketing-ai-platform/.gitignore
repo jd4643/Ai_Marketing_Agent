@@ -1,0 +1,27 @@
+# Compiled class files
+*.class
+
+# Maven target directories
+**/target/
+
+# IDE files
+.idea/
+*.iml
+.vscode/
+*.swp
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+*.egg-info/
+venv/
+.env
+
+# Logs
+*.log

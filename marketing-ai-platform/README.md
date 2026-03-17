@@ -7,9 +7,12 @@ Production-oriented monorepo implementing a multi-service marketing AI platform 
 - Stores **strategy generation history** in `strategy_history`.
 - Stores **performance telemetry** in `campaign_metrics`.
 - Stores **creative winners** in `creatives`.
+- Stores **generated creative assets** in `creative_assets` (linked to business + strategy + creative concept).
 - Stores **fresh trend signals** in `trends` every 6 hours.
 - Strategy prompt injection uses profile + last-30-day metrics + winning creatives.
 - Creative prompt injection uses profile + last-7-day trends + winning creatives + optional linked strategy.
+- Creative blueprints are generation-ready: each concept includes AI image/video prompts and generation metadata.
+- Asset generation persists records with full provenance for feedback loop learning.
 
 ## Services
 - `api-gateway` (8080): routing, request-id propagation, CORS, per-IP rate limit.
@@ -17,7 +20,7 @@ Production-oriented monorepo implementing a multi-service marketing AI platform 
 - `creative-service` (8082): creative blueprints using trends/strategy/winners.
 - `analytics-service` (8083): metrics ingest + summary; owns Flyway migration.
 - `trend-service` (8091): pytrends ingestion, scheduled refresh, trends read API.
-- `generation-service` (8092): production-safe image generation stub.
+- `generation-service` (8092): creative asset generation with DB persistence, prompt builder, DALL-E integration (stubbed by default).
 
 ## Environment
 Copy `infra/.env.example` -> `infra/.env` and update secrets.
@@ -200,7 +203,8 @@ curl -X POST localhost:8080/generate/image -H 'Content-Type: application/json' -
 ## Notes on external credentials
 - `strategy-service` and `creative-service` require `OPENAI_API_KEY` for live LLM responses.
 - If key is missing/invalid, deterministic fallback/stub JSON responses are returned and history is recorded.
-- `generation-service` intentionally returns `STUBBED` until `OPENAI_IMAGE_API_KEY` provider integration is added.
+- `generation-service` returns `STUBBED` status by default. Set `OPENAI_IMAGE_API_KEY` for real DALL-E image generation.
+- `OPENAI_IMAGE_MODEL` defaults to `dall-e-3`. `OPENAI_IMAGE_BASE_URL` defaults to the standard OpenAI endpoint.
 
 ---
 
@@ -371,4 +375,253 @@ Run tests:
 cd strategy-service
 mvn test -pl .
 ```
+
+---
+
+## Creative Asset Generation
+
+### End-to-End User Flow
+The platform now supports a complete creative production pipeline:
+
+```
+Create Business → Generate Strategy → Generate Creative Blueprint → Generate Assets
+```
+
+1. **Create business profile** via `POST /strategy/business-profiles`
+2. **Generate marketing strategy** via `POST /strategy/generate` → returns `requestId`
+3. **Generate creative blueprints** via `POST /creative/generate` (pass `strategyRequestId` to link)
+4. **Generate creative assets** via `POST /generate/creative-assets` (use blueprint fields as input)
+5. **Retrieve assets** via `GET /generate/assets?businessId=...`
+
+Each creative concept in the blueprint response now includes:
+- `generationReady: true` — indicates the concept can be sent directly to generation
+- `recommendedAssetTypes` — e.g. `["image", "video", "carousel"]`
+- `generationPayloadExample` — a ready-to-use JSON payload for `POST /generate/creative-assets`
+
+### Creative Blueprint Fields (enriched)
+Each concept in `POST /creative/generate` response now includes:
+
+| Field | Description |
+|---|---|
+| `conceptName` | Unique creative concept name |
+| `platform` | Target platform |
+| `format` | Ad format |
+| `hook` | Attention-grabbing opening line |
+| `emotionalAngle` | Core emotional trigger |
+| `visualStyle` | cinematic, minimal, bold-graphic, UGC, lifestyle, editorial |
+| `productFocus` | Product/service element highlighted |
+| `sceneDescription` | Detailed visual scene layout |
+| `compositionNotes` | Framing, focal point, layout |
+| `lightingNotes` | Lighting style |
+| `brandTone` | Tone of voice for copy |
+| `primaryText` | Main ad copy |
+| `headline` | Short headline |
+| `cta` | Call to action |
+| `aiImagePrompt` | Complete DALL-E/Midjourney-ready image prompt |
+| `aiVideoPrompt` | Complete video ad concept description |
+| `performanceAngle` | Marketing psychology angle |
+| `trendUsed` | Which trend influenced this concept |
+| `rationale` | Why this concept will perform |
+| `recommendedAssetTypes` | Suggested asset types to generate |
+| `generationReady` | Boolean: true if ready for asset generation |
+| `generationPayloadExample` | Example payload for `/generate/creative-assets` |
+
+All new fields are additive. Existing fields remain unchanged for backward compatibility.
+
+### Generate Creative Assets
+**Endpoint:** `POST /generate/creative-assets`
+
+**Request:**
+```json
+{
+  "businessId": "UUID (required)",
+  "creativeId": "UUID (optional — links to creatives table)",
+  "strategyRequestId": "UUID (optional — links to strategy run)",
+  "assetType": "image|video|carousel (required)",
+  "platform": "meta|google|tiktok|youtube (optional)",
+  "prompt": "string (optional — direct prompt override)",
+  "creativeConceptName": "string (optional)",
+  "count": 1,
+  "size": "1024x1024 (optional)",
+  "trendContext": {
+    "industry": "optional",
+    "keywords": ["optional"]
+  },
+  "metadata": {
+    "hook": "optional",
+    "headline": "optional",
+    "cta": "optional",
+    "visualStyle": "optional",
+    "emotionalAngle": "optional",
+    "sceneDescription": "optional",
+    "compositionNotes": "optional",
+    "lightingNotes": "optional",
+    "brandTone": "optional",
+    "productFocus": "optional",
+    "conceptName": "optional"
+  }
+}
+```
+
+**Response:**
+```json
+{
+  "requestId": "UUID",
+  "status": "SUCCESS|STUBBED|FAILED",
+  "assets": [
+    {
+      "assetId": "UUID",
+      "assetType": "image",
+      "status": "SUCCESS|STUBBED|FAILED",
+      "url": "string or null",
+      "thumbnailUrl": "string or null",
+      "provider": "OPENAI|STUB",
+      "providerAssetId": "string or null",
+      "promptUsed": "the final generated prompt"
+    }
+  ]
+}
+```
+
+### Retrieve Generated Assets
+```bash
+# List assets for a business
+curl 'localhost:8080/generate/assets?businessId=<UUID>&limit=20'
+
+# Get single asset
+curl 'localhost:8080/generate/assets/<assetId>'
+```
+
+### Stubbed vs Real Generation
+- **Without `OPENAI_IMAGE_API_KEY`:** Returns `STUBBED` status. Records are persisted to DB with full metadata. The response structure is identical to real generation — frontend code does not need to change.
+- **With `OPENAI_IMAGE_API_KEY`:** Calls OpenAI DALL-E API for real image generation. Returns `SUCCESS` status with actual asset URLs.
+
+### Required Environment Variables for Real Generation
+```bash
+# Add to infra/.env for real image generation:
+OPENAI_IMAGE_API_KEY=sk-your-openai-key
+OPENAI_IMAGE_MODEL=dall-e-3          # default: dall-e-3
+OPENAI_IMAGE_BASE_URL=https://api.openai.com/v1/images/generations  # default
+```
+
+### Prompt Builder
+The generation service includes a `CreativeAssetPromptBuilder` that constructs rich, visually descriptive prompts from:
+- Creative blueprint fields (scene, style, lighting, composition, mood)
+- Business context (industry, product)
+- Trend context (keywords injected subtly)
+- Platform considerations (aspect ratio, format hints)
+
+If a direct `prompt` field is provided without metadata, it passes through unchanged. Otherwise, the builder composes a structured prompt optimized for image/video generation.
+
+### Database: creative_assets Table
+All generated assets are persisted in `creative_assets` (Flyway migration V3):
+
+| Column | Type | Description |
+|---|---|---|
+| `id` | UUID PK | Asset identifier |
+| `business_id` | UUID FK | Links to business_profile |
+| `creative_id` | UUID FK nullable | Links to creatives table |
+| `strategy_request_id` | UUID nullable | Links to strategy run |
+| `asset_type` | TEXT | IMAGE, VIDEO, CAROUSEL |
+| `platform` | TEXT nullable | meta, google, tiktok, youtube |
+| `prompt_text` | TEXT | Final prompt used for generation |
+| `provider` | TEXT | STUB, OPENAI |
+| `provider_asset_id` | TEXT nullable | Provider's asset identifier |
+| `asset_url` | TEXT nullable | Generated asset URL |
+| `thumbnail_url` | TEXT nullable | Thumbnail URL |
+| `status` | TEXT | PENDING, SUCCESS, FAILED, STUBBED |
+| `trend_context_json` | JSONB nullable | Trend context preserved |
+| `metadata_json` | JSONB nullable | Creative metadata preserved |
+| `created_at` | TIMESTAMP | Auto-set |
+
+Indexes on `business_id`, `strategy_request_id`, and `created_at`.
+
+### Full E2E Example with curl
+
+```bash
+# Step 1: Create business profile
+curl -X POST localhost:8080/strategy/business-profiles \
+  -H 'Content-Type: application/json' \
+  -H 'X-Request-Id: aaa00000-0000-0000-0000-000000000001' \
+  -d '{
+    "businessName": "Acme Jewelry",
+    "industry": "jewelry",
+    "product": "gold rings",
+    "priceRange": "$50-$200",
+    "location": "US",
+    "targetAudience": "women 25-45",
+    "websiteUrl": "https://acme.example.com"
+  }'
+# Save the returned businessId
+
+# Step 2: Generate strategy
+curl -X POST localhost:8080/strategy/generate \
+  -H 'Content-Type: application/json' \
+  -H 'X-Request-Id: aaa00000-0000-0000-0000-000000000002' \
+  -d '{
+    "businessId": "<businessId>",
+    "objective": "sales",
+    "monthlyBudget": 2000,
+    "trends": ["minimalist jewelry"],
+    "notes": "focus DTC"
+  }'
+# Save the returned requestId as strategyRequestId
+
+# Step 3: Generate creative blueprint
+curl -X POST localhost:8080/creative/generate \
+  -H 'Content-Type: application/json' \
+  -H 'X-Request-Id: aaa00000-0000-0000-0000-000000000003' \
+  -d '{
+    "businessId": "<businessId>",
+    "platform": "meta",
+    "format": "image",
+    "objective": "sales",
+    "strategyRequestId": "<strategyRequestId>"
+  }'
+# Response includes creativeConcepts with generationReady=true
+# Use the generationPayloadExample from any concept as input to step 4
+
+# Step 4: Generate creative asset (image)
+curl -X POST localhost:8080/generate/creative-assets \
+  -H 'Content-Type: application/json' \
+  -H 'X-Request-Id: aaa00000-0000-0000-0000-000000000004' \
+  -d '{
+    "businessId": "<businessId>",
+    "strategyRequestId": "<strategyRequestId>",
+    "assetType": "image",
+    "platform": "meta",
+    "creativeConceptName": "Trend-led UGC for Acme Jewelry",
+    "metadata": {
+      "hook": "Stop scrolling — Acme Jewelry just changed the game",
+      "headline": "Make the switch today",
+      "cta": "Shop Now",
+      "visualStyle": "UGC",
+      "sceneDescription": "Close-up of gold rings being unboxed in a lifestyle setting",
+      "lightingNotes": "Natural daylight, warm tones",
+      "productFocus": "gold rings",
+      "emotionalAngle": "curiosity and social proof"
+    },
+    "trendContext": {
+      "industry": "jewelry",
+      "keywords": ["minimalist jewelry", "gold necklace"]
+    }
+  }'
+
+# Step 5: List generated assets
+curl 'localhost:8080/generate/assets?businessId=<businessId>&limit=20'
+
+# Step 6: Get single asset details
+curl 'localhost:8080/generate/assets/<assetId>'
+```
+
+### Feedback Loop Readiness
+Generated asset records preserve:
+- Business linkage (`business_id`)
+- Strategy linkage (`strategy_request_id`)
+- Creative concept linkage (`creative_id`)
+- Full prompt text used for generation
+- Trend context at time of generation
+- Creative metadata (hook, headline, CTA, concept name, etc.)
+
+This enables future performance tracking per asset, allowing the platform to learn which creative concepts, prompts, and trend directions produce the best-performing ads.
 

@@ -40,6 +40,7 @@ services:
     build: ../generation-service
     env_file: [.env]
     ports: ["8092:8092"]
+    depends_on: [analytics-service]
   api-gateway:
     build: ../api-gateway
     env_file: [.env]
