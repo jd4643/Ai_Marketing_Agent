@@ -38,6 +38,7 @@ class CreativeAssetPerformanceControllerTest {
     @MockBean CreativeWinnerScoringService scoringService;
     @MockBean CreativeOptimizationRecommendationService recommendationService;
     @MockBean RecommendationActionService actionService;
+    @MockBean com.marketing.analytics.service.DashboardAggregationService dashboardAggregationService;
 
     @Test void ingestValidation() throws Exception {
         mvc.perform(post("/analytics/creative-assets/metrics/ingest")

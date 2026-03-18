@@ -1109,3 +1109,66 @@ cd generation-service && python3 -m pytest test_app.py -v
 #   TestRecommendationPromptBuilder — type-specific directives, winning context, performance data
 ```
 
+---
+
+## Phase 7 — Dashboard Aggregation Layer
+
+Frontend-ready aggregation endpoints that combine data from multiple existing services into screen-shaped responses. All endpoints live in `analytics-service` under `/analytics/dashboard/*` and are routed through the API gateway.
+
+### Endpoints
+
+| Endpoint | Description |
+|---|---|
+| `GET /analytics/dashboard/overview?businessId=&days=30` | Home summary: spend, creative health, open recommendations, top signals, sync status |
+| `GET /analytics/dashboard/creatives?businessId=&status=&platform=&limit=50` | Asset library with classification, scores, metrics, and metadata |
+| `GET /analytics/dashboard/recommendations?businessId=&status=OPEN` | Recommendations grouped by priority with available actions |
+| `GET /analytics/dashboard/strategy?businessId=` | Strategy console: business profile, campaign performance, creative health, top recommendations |
+| `GET /analytics/dashboard/platforms?businessId=&days=30` | Per-platform breakdown with top campaigns, top ads, and mapped asset counts |
+
+### Architecture
+
+```
+DashboardController (5 GET endpoints)
+        │
+DashboardAggregationService
+        │
+   ┌────┼────┬─────────┬──────────┬────────────┐
+   │    │    │         │          │            │
+BusinessProfile  CampaignMetric  Scoring   Recommendations  Connections  Insights
+  Repo           Repo          Service    Repo              Repo         Repo
+```
+
+- **No business logic duplication**: the service delegates to existing repositories and services (e.g., `CreativeWinnerScoringService.scoreAllAssets`, `CampaignMetricRepository.aggregate`)
+- **Typed DTOs**: all responses use Java records in `com.marketing.analytics.dashboard.DashboardDtos`
+- **Graceful empty states**: every endpoint returns a stable response shape even with no data
+
+### Quick Test
+
+```bash
+# Overview dashboard
+curl "http://localhost:8080/analytics/dashboard/overview?businessId={businessId}&days=30"
+
+# Creative asset library
+curl "http://localhost:8080/analytics/dashboard/creatives?businessId={businessId}&status=WINNER&platform=meta&limit=10"
+
+# Recommendations page
+curl "http://localhost:8080/analytics/dashboard/recommendations?businessId={businessId}&status=OPEN"
+
+# Strategy console
+curl "http://localhost:8080/analytics/dashboard/strategy?businessId={businessId}"
+
+# Platform insights
+curl "http://localhost:8080/analytics/dashboard/platforms?businessId={businessId}&days=30"
+```
+
+### Testing Phase 7
+
+```bash
+# Analytics service — 128 tests (28 new dashboard tests)
+cd analytics-service && mvn clean test
+
+# New test classes:
+#   DashboardControllerTest — 14 tests: all 5 endpoints, filters, empty states, error handling
+#   DashboardAggregationServiceTest — 14 tests: aggregation logic, filtering, empty states, null safety
+```
+

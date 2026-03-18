@@ -33,6 +33,7 @@ class AnalyticsControllerTest {
   @MockBean CreativeWinnerScoringService scoringService;
   @MockBean CreativeOptimizationRecommendationService recommendationService;
   @MockBean RecommendationActionService actionService;
+  @MockBean com.marketing.analytics.service.DashboardAggregationService dashboardAggregationService;
 
   @Test void ingestValidation() throws Exception {
     mvc.perform(post("/analytics/metrics/ingest").contentType(MediaType.APPLICATION_JSON).content("{}"))

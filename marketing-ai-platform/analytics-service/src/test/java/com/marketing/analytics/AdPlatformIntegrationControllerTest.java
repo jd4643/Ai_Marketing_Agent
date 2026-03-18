@@ -39,6 +39,7 @@ class AdPlatformIntegrationControllerTest {
     @MockBean CreativeWinnerScoringService scoringService;
     @MockBean CreativeOptimizationRecommendationService recommendationService;
     @MockBean RecommendationActionService actionService;
+    @MockBean com.marketing.analytics.service.DashboardAggregationService dashboardAggregationService;
 
     // ─── Connect ────────────────────────────────────────────────────────
 

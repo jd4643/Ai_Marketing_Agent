@@ -40,6 +40,7 @@ class RecommendationActionControllerTest {
     @MockBean CreativeWinnerScoringService scoringService;
     @MockBean CreativeOptimizationRecommendationService recommendationService;
     @MockBean RecommendationActionService actionService;
+    @MockBean com.marketing.analytics.service.DashboardAggregationService dashboardAggregationService;
 
     // --- Apply endpoint ---
 
