@@ -75,6 +75,15 @@ public record StrategyResponse(
         Map<String, Object> first14DaysLearningPlan,
 
         /** Business-friendly consultant-style markdown explanation for UI rendering. */
-        String humanReadablePlanMarkdown
+        String humanReadablePlanMarkdown,
+
+        /** Creative asset winner insights — top-performing asset details with classification. */
+        List<Map<String, Object>> winnerInsights,
+
+        /** Optimization signals from weak/underperforming assets. */
+        List<String> optimizationSignals,
+
+        /** Suggested next creative moves based on winner/loser analysis. */
+        List<String> recommendedNextCreativeMoves
 ) {}
 

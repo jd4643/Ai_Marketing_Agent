@@ -440,6 +440,128 @@ class TestVariationPromptBuilder(unittest.TestCase):
         self.assertIn("contrasting", result.lower())
         self.assertIn("editorial", result)
 
+    def test_similar_prompt(self):
+        from app import _build_variation_prompt
+        winner = {
+            "prompt_text": "product on table",
+            "metadata_json": {"hook": "Don't miss this", "visualStyle": "minimal", "emotionalAngle": "urgency"},
+            "avg_roas": 4.0,
+            "total_conversions": 20,
+        }
+        result = _build_variation_prompt(winner, "similar", {"product": "candles"})
+        self.assertIn("similar", result.lower())
+        self.assertIn("Don't miss this", result)
+        self.assertIn("minimal", result)
+
+    def test_fresh_angle_prompt(self):
+        from app import _build_variation_prompt
+        winner = {
+            "prompt_text": "lifestyle shot",
+            "metadata_json": {"hook": "Ready for this?"},
+            "avg_roas": 3.0,
+            "total_conversions": 8,
+        }
+        result = _build_variation_prompt(winner, "fresh-angle", None)
+        self.assertIn("fresh", result.lower())
+        self.assertIn("Ready for this?", result)
+
+    def test_platform_adapted_prompt(self):
+        from app import _build_variation_prompt
+        winner = {
+            "prompt_text": "UGC style ad",
+            "metadata_json": {"hook": "Watch this"},
+            "platform": "tiktok",
+            "avg_roas": 2.5,
+            "total_conversions": 12,
+        }
+        result = _build_variation_prompt(winner, "platform-adapted", None)
+        self.assertIn("adapt", result.lower())
+        self.assertIn("tiktok", result.lower())
+
+    def test_classification_in_prompt(self):
+        from app import _build_variation_prompt
+        winner = {
+            "prompt_text": "test",
+            "metadata_json": {},
+            "avg_roas": 3.0,
+            "total_conversions": 10,
+            "classification": "WINNER",
+            "performance_score": 0.85,
+        }
+        result = _build_variation_prompt(winner, "iteration", None)
+        self.assertIn("WINNER", result)
+        self.assertIn("0.85", result)
+
+
+class TestFromWinnerResponseClassification(unittest.TestCase):
+    @patch("app._fetch_business")
+    @patch("app._persist_asset")
+    @patch("app._query_winner_asset")
+    @patch("app._is_provider_configured", return_value=False)
+    def test_classification_in_response(self, mock_provider, mock_winner, mock_persist, mock_biz):
+        winner_id = "550e8400-e29b-41d4-a716-446655440000"
+        business_id = "660e8400-e29b-41d4-a716-446655440000"
+        mock_winner.return_value = {
+            "id": winner_id,
+            "business_id": business_id,
+            "asset_type": "image",
+            "platform": "meta",
+            "prompt_text": "winning prompt",
+            "metadata_json": {"hook": "Stop scrolling"},
+            "trend_context_json": None,
+            "total_impressions": 5000,
+            "total_clicks": 200,
+            "total_conversions": 10,
+            "avg_roas": 3.5,
+            "classification": "WINNER",
+            "performance_score": 0.85,
+            "confidence_score": 0.92,
+        }
+        mock_biz.return_value = {"business_name": "TestBiz", "industry": "jewelry", "product": "rings"}
+        resp = client.post("/generate/creative-assets/from-winner", json={
+            "winnerAssetId": winner_id,
+            "businessId": business_id,
+            "variationType": "similar",
+        })
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertEqual(data["winnerClassification"], "WINNER")
+        self.assertAlmostEqual(data["winnerPerformanceScore"], 0.85, places=2)
+        self.assertAlmostEqual(data["winnerConfidenceScore"], 0.92, places=2)
+
+    @patch("app._fetch_business")
+    @patch("app._persist_asset")
+    @patch("app._query_winner_asset")
+    @patch("app._is_provider_configured", return_value=False)
+    def test_null_classification_in_response(self, mock_provider, mock_winner, mock_persist, mock_biz):
+        winner_id = "550e8400-e29b-41d4-a716-446655440000"
+        business_id = "660e8400-e29b-41d4-a716-446655440000"
+        mock_winner.return_value = {
+            "id": winner_id,
+            "business_id": business_id,
+            "asset_type": "image",
+            "platform": "meta",
+            "prompt_text": "old prompt",
+            "metadata_json": None,
+            "trend_context_json": None,
+            "total_impressions": 100,
+            "total_clicks": 2,
+            "total_conversions": 0,
+            "avg_roas": 0,
+            "classification": None,
+            "performance_score": None,
+            "confidence_score": None,
+        }
+        mock_biz.return_value = {"business_name": "TestBiz", "industry": "tech", "product": "app"}
+        resp = client.post("/generate/creative-assets/from-winner", json={
+            "winnerAssetId": winner_id,
+            "businessId": business_id,
+        })
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertIsNone(data["winnerClassification"])
+        self.assertIsNone(data["winnerPerformanceScore"])
+
 
 if __name__ == "__main__":
     unittest.main()

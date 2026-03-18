@@ -469,7 +469,7 @@ def generate_creative_assets(req: CreativeAssetRequest, request: Request):
 class FromWinnerRequest(BaseModel):
     winnerAssetId: str
     businessId: str
-    variationType: str = Field(default="iteration", pattern=r"^(iteration|remix|opposite)$")
+    variationType: str = Field(default="iteration", pattern=r"^(iteration|remix|opposite|similar|fresh-angle|platform-adapted)$")
     assetType: Optional[str] = Field(None, pattern=r"^(image|video|carousel)$")
     platform: Optional[str] = Field(None, pattern=r"^(meta|google|tiktok|youtube)$")
     count: int = Field(default=1, ge=1, le=4)
@@ -486,7 +486,10 @@ def _query_winner_asset(asset_id: str) -> Optional[dict]:
                           COALESCE(SUM(cap.impressions),0) as total_impressions,
                           COALESCE(SUM(cap.clicks),0) as total_clicks,
                           COALESCE(SUM(cap.conversions),0) as total_conversions,
-                          COALESCE(AVG(cap.roas),0) as avg_roas
+                          COALESCE(AVG(cap.roas),0) as avg_roas,
+                          MAX(cap.classification) as classification,
+                          MAX(cap.performance_score) as performance_score,
+                          MAX(cap.confidence_score) as confidence_score
                    FROM creative_assets ca
                    LEFT JOIN creative_asset_performance cap ON cap.creative_asset_id = ca.id
                    WHERE ca.id = %s
@@ -537,6 +540,38 @@ def _build_variation_prompt(winner: dict, variation_type: str, business_info: Op
             parts.append(f"Use contrasting visual style: {opposite_style}")
         parts.append("Create the opposite approach while targeting the same audience.")
 
+    elif variation_type == "similar":
+        parts.append("Create a close variation of this winning ad creative, keeping the same core approach.")
+        parts.append(f"Original concept: {original_prompt}")
+        if metadata.get("hook"):
+            parts.append(f"Keep similar hook pattern: {metadata['hook']}")
+        if metadata.get("visualStyle"):
+            parts.append(f"Keep same visual style: {metadata['visualStyle']}")
+        if metadata.get("emotionalAngle"):
+            parts.append(f"Keep same emotional angle: {metadata['emotionalAngle']}")
+        parts.append("Make subtle variations — different product angle, slightly different copy, same winning formula.")
+
+    elif variation_type == "fresh-angle":
+        parts.append("Create a fresh-angle variation of this winning ad creative with a completely new perspective.")
+        parts.append(f"Original concept: {original_prompt}")
+        if metadata.get("hook"):
+            parts.append(f"Original hook was: {metadata['hook']} — find a completely different hook that targets the same desire")
+        parts.append("Same product, same audience, but entirely different creative angle and messaging approach.")
+
+    elif variation_type == "platform-adapted":
+        target_platform = winner.get("platform", "meta")
+        parts.append(f"Adapt this winning creative for optimal performance on {target_platform}.")
+        parts.append(f"Original concept: {original_prompt}")
+        if metadata.get("hook"):
+            parts.append(f"Winning hook: {metadata['hook']}")
+        platform_guidance = {
+            "meta": "Optimize for Facebook/Instagram: bold visuals, short punchy copy, emotional hooks.",
+            "google": "Optimize for Google Ads: clear value proposition, direct CTA, product-focused.",
+            "tiktok": "Optimize for TikTok: native UGC feel, trend-aware, fast-paced, authentic.",
+            "youtube": "Optimize for YouTube: cinematic quality, story-driven, longer format hook.",
+        }
+        parts.append(platform_guidance.get(target_platform, "Adapt for the platform's best practices."))
+
     if business_info:
         if business_info.get("product"):
             parts.append(f"Product: {business_info['product']}")
@@ -548,6 +583,10 @@ def _build_variation_prompt(winner: dict, variation_type: str, business_info: Op
         perf.append(f"ROAS: {winner['avg_roas']:.2f}")
     if winner.get("total_conversions"):
         perf.append(f"Conversions: {winner['total_conversions']}")
+    if winner.get("classification"):
+        perf.append(f"Classification: {winner['classification']}")
+    if winner.get("performance_score"):
+        perf.append(f"Score: {winner['performance_score']:.2f}")
     if perf:
         parts.append(f"Original performance: {', '.join(perf)}")
 
@@ -669,6 +708,9 @@ def generate_from_winner(req: FromWinnerRequest, request: Request):
         "status": overall_status,
         "winnerAssetId": req.winnerAssetId,
         "variationType": req.variationType,
+        "winnerClassification": winner.get("classification"),
+        "winnerPerformanceScore": float(winner["performance_score"]) if winner.get("performance_score") else None,
+        "winnerConfidenceScore": float(winner["confidence_score"]) if winner.get("confidence_score") else None,
         "assets": assets_response,
     }
 

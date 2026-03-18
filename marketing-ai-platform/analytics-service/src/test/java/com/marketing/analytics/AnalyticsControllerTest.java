@@ -9,7 +9,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.marketing.analytics.model.CampaignMetric;
 import com.marketing.analytics.repo.CampaignMetricRepository;
 import com.marketing.analytics.repo.CreativeAssetPerformanceRepository;
+import com.marketing.analytics.repo.CreativeOptimizationRecommendationRepository;
 import com.marketing.analytics.service.AdPlatformIntegrationService;
+import com.marketing.analytics.service.CreativeOptimizationRecommendationService;
+import com.marketing.analytics.service.CreativeWinnerScoringService;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -24,7 +27,10 @@ class AnalyticsControllerTest {
   @Autowired MockMvc mvc;
   @MockBean CampaignMetricRepository repo;
   @MockBean CreativeAssetPerformanceRepository capRepo;
+  @MockBean CreativeOptimizationRecommendationRepository recRepo;
   @MockBean AdPlatformIntegrationService integrationService;
+  @MockBean CreativeWinnerScoringService scoringService;
+  @MockBean CreativeOptimizationRecommendationService recommendationService;
 
   @Test void ingestValidation() throws Exception {
     mvc.perform(post("/analytics/metrics/ingest").contentType(MediaType.APPLICATION_JSON).content("{}"))

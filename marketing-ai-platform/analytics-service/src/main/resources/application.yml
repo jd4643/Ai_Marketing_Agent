@@ -34,6 +34,12 @@ creative:
     min-roas: ${CREATIVE_WINNER_MIN_ROAS:2.0}
   weak:
     max-roas: ${CREATIVE_WEAK_MAX_ROAS:0.8}
+  min-confidence: ${CREATIVE_MIN_CONFIDENCE:0.60}
+  scoring:
+    weight-ctr: ${CREATIVE_SCORING_WEIGHT_CTR:0.25}
+    weight-roas: ${CREATIVE_SCORING_WEIGHT_ROAS:0.35}
+    weight-conversions: ${CREATIVE_SCORING_WEIGHT_CONVERSIONS:0.25}
+    weight-cpa-penalty: ${CREATIVE_SCORING_WEIGHT_CPA_PENALTY:0.15}
 meta:
   api:
     base-url: ${META_API_BASE_URL:https://graph.facebook.com}

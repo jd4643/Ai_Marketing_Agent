@@ -13,9 +13,10 @@ public class CreativeService {
   List<String> trends=req.trendsOverride()!=null&&!req.trendsOverride().isEmpty()?req.trendsOverride():trends((String)business.get("industry"));
   List<Map<String,Object>> winners=winners(req.businessId());
   List<Map<String,Object>> assetWinnersList=assetWinners(req.businessId());
+  List<Map<String,Object>> assetLosersList=assetLosers(req.businessId());
   String strategySummary=req.strategyRequestId()!=null?strategy(req.strategyRequestId()):"none";
   Map<String,Object> out;
-  try{out=openai(req,requestId,business,trends,winners,strategySummary,assetWinnersList);}catch(Exception e){
+  try{out=openai(req,requestId,business,trends,winners,strategySummary,assetWinnersList,assetLosersList);}catch(Exception e){
     log.warn("OpenAI creative generation failed, using fallback: {}", e.getMessage());
     out=fallback(req,requestId,trends,business);
   }
@@ -28,11 +29,17 @@ public class CreativeService {
     out.put("basedOnWinners", false);
     out.put("winnerSignalsUsed", 0);
   }
+  if (!assetLosersList.isEmpty()) {
+    out.put("avoidsWeakPatterns", true);
+    out.put("weakPatternsAvoided", assetLosersList.size());
+  } else {
+    out.put("avoidsWeakPatterns", false);
+  }
   storeCreative(req.businessId(),req.platform(),req.format(), ((List<Map<String,Object>>)out.get("creativeConcepts")).get(0).get("performanceAngle").toString(), ((List<Map<String,Object>>)out.get("creativeConcepts")).get(0).get("hook").toString());
   return out;
  }
- private Map<String,Object> openai(GenerateRequest req,UUID requestId,Map<String,Object> business,List<String> trends,List<Map<String,Object>> winners,String strategy,List<Map<String,Object>> assetWinners) throws Exception {
-  String prompt = buildCreativeDirectorPrompt(req, business, trends, winners, strategy, assetWinners);
+ private Map<String,Object> openai(GenerateRequest req,UUID requestId,Map<String,Object> business,List<String> trends,List<Map<String,Object>> winners,String strategy,List<Map<String,Object>> assetWinners,List<Map<String,Object>> assetLosers) throws Exception {
+  String prompt = buildCreativeDirectorPrompt(req, business, trends, winners, strategy, assetWinners, assetLosers);
   if(apiKey==null||apiKey.isBlank()) throw new IllegalStateException("OpenAI API key not configured");
   String json=om.writeValueAsString(Map.of("model",model,"response_format",Map.of("type","json_object"),"messages",List.of(Map.of("role","system","content",SYSTEM_PROMPT),Map.of("role","user","content",prompt))));
   Request r=new Request.Builder().url("https://api.openai.com/v1/chat/completions").addHeader("Authorization","Bearer "+apiKey).post(RequestBody.create(json,MediaType.get("application/json"))).build();
@@ -51,7 +58,7 @@ public class CreativeService {
    "Each aiImagePrompt must be a complete, visually descriptive generation prompt including scene, lighting, composition, mood, product placement, and style. " +
    "Each aiVideoPrompt must describe the video concept in enough detail to produce a 15-30 second ad.";
 
- private String buildCreativeDirectorPrompt(GenerateRequest req, Map<String,Object> business, List<String> trends, List<Map<String,Object>> winners, String strategy, List<Map<String,Object>> assetWinners) {
+ private String buildCreativeDirectorPrompt(GenerateRequest req, Map<String,Object> business, List<String> trends, List<Map<String,Object>> winners, String strategy, List<Map<String,Object>> assetWinners, List<Map<String,Object>> assetLosers) {
    StringBuilder sb = new StringBuilder();
    sb.append("## BUSINESS CONTEXT\n");
    sb.append("Business: ").append(business.get("businessName")).append("\n");
@@ -85,6 +92,19 @@ public class CreativeService {
        sb.append("\n");
      }
      sb.append("Build on these winning patterns. Iterate and improve, don't copy.\n\n");
+   }
+
+   if (assetLosers != null && !assetLosers.isEmpty()) {
+     sb.append("## WEAK CREATIVE ASSETS — AVOID THESE PATTERNS\n");
+     sb.append("These assets underperformed. Avoid their hooks and visual styles:\n");
+     for (Map<String,Object> al : assetLosers) {
+       sb.append("- asset: ").append(al.get("assetId")).append(" | platform: ").append(al.get("platform"));
+       sb.append(" | ROAS: ").append(al.get("avgRoas"));
+       if (al.get("hook") != null) sb.append(" | weak hook: ").append(al.get("hook"));
+       if (al.get("visualStyle") != null) sb.append(" | weak style: ").append(al.get("visualStyle"));
+       sb.append("\n");
+     }
+     sb.append("Do NOT reuse these patterns. Find fresh angles instead.\n\n");
    }
 
    if (!"none".equals(strategy)) {
@@ -292,6 +312,38 @@ public class CreativeService {
     out.add(m);
    }
   }catch(Exception e){log.warn("Failed to query asset winners: {}",e.getMessage());}
+  return out;
+ }
+ private List<Map<String,Object>> assetLosers(UUID businessId){
+  List<Map<String,Object>> out=new ArrayList<>();
+  try(Connection c=ds.getConnection(); PreparedStatement ps=c.prepareStatement(
+    "SELECT cap.creative_asset_id, cap.platform, COALESCE(SUM(cap.impressions),0) as impressions, " +
+    "COALESCE(SUM(cap.clicks),0) as clicks, COALESCE(SUM(cap.conversions),0) as conversions, " +
+    "COALESCE(AVG(cap.roas),0) as avg_roas, ca.metadata_json " +
+    "FROM creative_asset_performance cap JOIN creative_assets ca ON ca.id=cap.creative_asset_id " +
+    "WHERE cap.business_id=? AND cap.recorded_at>=? AND cap.classification='WEAK' " +
+    "GROUP BY cap.creative_asset_id, cap.platform, ca.metadata_json " +
+    "ORDER BY avg_roas ASC LIMIT 5")){
+   ps.setObject(1,businessId);
+   ps.setTimestamp(2,Timestamp.from(Instant.now().minus(30,ChronoUnit.DAYS)));
+   ResultSet rs=ps.executeQuery();
+   while(rs.next()){
+    Map<String,Object> m=new LinkedHashMap<>();
+    m.put("assetId",rs.getObject(1).toString());
+    m.put("platform",rs.getString(2));
+    m.put("impressions",rs.getLong(3));
+    m.put("clicks",rs.getLong(4));
+    m.put("conversions",rs.getLong(5));
+    m.put("avgRoas",rs.getBigDecimal(6));
+    String metaJson=rs.getString(7);
+    if(metaJson!=null&&!metaJson.isBlank()){
+     try{Map<String,Object> meta=om.readValue(metaJson,new TypeReference<>(){});
+      m.put("hook",meta.get("hook")); m.put("visualStyle",meta.get("visualStyle"));
+     }catch(Exception ignored){}
+    }
+    out.add(m);
+   }
+  }catch(Exception e){log.warn("Failed to query asset losers: {}",e.getMessage());}
   return out;
  }
  private String strategy(UUID rid){ try(Connection c=ds.getConnection(); PreparedStatement ps=c.prepareStatement("SELECT response_json::text FROM strategy_history WHERE request_id=? ORDER BY created_at DESC LIMIT 1")){ps.setObject(1,rid); ResultSet rs=ps.executeQuery(); if(rs.next()) return rs.getString(1);}catch(Exception e){throw new RuntimeException(e);} return "none"; }

@@ -36,6 +36,8 @@ public class AdPlatformIntegrationService {
     private final MetaInsightNormalizer metaNormalizer;
     private final MetaCreativeAssetMapper metaMapper;
     private final DataSource ds;
+    private final CreativeWinnerScoringService scoringService;
+    private final CreativeOptimizationRecommendationService recommendationService;
     private final ObjectMapper om = new ObjectMapper();
 
     @Value("${meta.sync.lookback-days:30}")
@@ -51,7 +53,9 @@ public class AdPlatformIntegrationService {
             MetaAdPlatformSyncClient metaSyncClient,
             MetaInsightNormalizer metaNormalizer,
             MetaCreativeAssetMapper metaMapper,
-            DataSource ds) {
+            DataSource ds,
+            CreativeWinnerScoringService scoringService,
+            CreativeOptimizationRecommendationService recommendationService) {
         this.connectionRepo = connectionRepo;
         this.adRepo = adRepo;
         this.insightRepo = insightRepo;
@@ -62,6 +66,8 @@ public class AdPlatformIntegrationService {
         this.metaNormalizer = metaNormalizer;
         this.metaMapper = metaMapper;
         this.ds = ds;
+        this.scoringService = scoringService;
+        this.recommendationService = recommendationService;
     }
 
     // ─── Connection Management ──────────────────────────────────────────
@@ -129,12 +135,17 @@ public class AdPlatformIntegrationService {
         int assetsMapped = mapCreativeAssets(conn);
         int perfDerived = derivePerformance(conn);
 
+        // Recompute classifications and generate recommendations after sync
+        int classified = scoringService.recomputeClassifications(businessId, lookbackDays);
+        recommendationService.generateAndPersist(businessId, lookbackDays);
+        log.info("Post-sync classification: businessId={} classified={}", businessId, classified);
+
         conn.setLastSyncedAt(Instant.now());
         conn.setUpdatedAt(Instant.now());
         connectionRepo.save(conn);
 
-        log.info("Meta sync complete: connection={} ads={} insights={} mapped={} perf={}",
-                connectionId, adsSynced, insightsSynced, assetsMapped, perfDerived);
+        log.info("Meta sync complete: connection={} ads={} insights={} mapped={} perf={} classified={}",
+                connectionId, adsSynced, insightsSynced, assetsMapped, perfDerived, classified);
 
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("requestId", requestId);
@@ -145,6 +156,7 @@ public class AdPlatformIntegrationService {
         result.put("insightsSynced", insightsSynced);
         result.put("assetsMapped", assetsMapped);
         result.put("performanceDerived", perfDerived);
+        result.put("classificationsRecomputed", classified);
         return result;
     }
 

@@ -12,7 +12,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.marketing.analytics.model.AdPlatformConnection;
 import com.marketing.analytics.repo.CampaignMetricRepository;
 import com.marketing.analytics.repo.CreativeAssetPerformanceRepository;
+import com.marketing.analytics.repo.CreativeOptimizationRecommendationRepository;
 import com.marketing.analytics.service.AdPlatformIntegrationService;
+import com.marketing.analytics.service.CreativeOptimizationRecommendationService;
+import com.marketing.analytics.service.CreativeWinnerScoringService;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -30,7 +33,10 @@ class AdPlatformIntegrationControllerTest {
     @Autowired MockMvc mvc;
     @MockBean CampaignMetricRepository campaignRepo;
     @MockBean CreativeAssetPerformanceRepository perfRepo;
+    @MockBean CreativeOptimizationRecommendationRepository recRepo;
     @MockBean AdPlatformIntegrationService service;
+    @MockBean CreativeWinnerScoringService scoringService;
+    @MockBean CreativeOptimizationRecommendationService recommendationService;
 
     // ─── Connect ────────────────────────────────────────────────────────
 

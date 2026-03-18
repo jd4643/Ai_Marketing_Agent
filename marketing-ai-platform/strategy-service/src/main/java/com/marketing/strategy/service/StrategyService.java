@@ -61,6 +61,7 @@ public class StrategyService {
         List<Map<String, Object>> metrics = metrics(req.businessId());
         List<Map<String, Object>> winners = winners(req.businessId());
         List<Map<String, Object>> assetWinnersList = assetWinners(req.businessId());
+        List<Map<String, Object>> assetLosersList = assetLosers(req.businessId());
 
         // Cold start = no performance history + no creative winners yet
         boolean coldStart = (metrics == null || metrics.isEmpty())
@@ -142,10 +143,17 @@ public class StrategyService {
             return toResponse(llmResp);
         }
         llmResp = normalizeOrFallback(llmResp, requestId, split, business, template, coldStart);
-        // Inject creative asset winner insights
+        // Inject creative asset winner insights and optimization signals
         if (!assetWinnersList.isEmpty()) {
             llmResp.put("winnerInsights", buildWinnerInsights(assetWinnersList));
-            llmResp.put("recommendedNextCreativeMoves", buildCreativeMoves(assetWinnersList));
+            llmResp.put("recommendedNextCreativeMoves", buildCreativeMoves(assetWinnersList, assetLosersList));
+        }
+        if (!assetLosersList.isEmpty()) {
+            List<String> weakSignals = new ArrayList<>();
+            for (Map<String, Object> loser : assetLosersList) {
+                weakSignals.add("Weak asset " + loser.get("assetId") + " on " + loser.get("platform") + " (ROAS=" + loser.get("avgRoas") + ") — consider pausing");
+            }
+            llmResp.put("optimizationSignals", weakSignals);
         }
         saveHistory(requestId, req, prompt, llmResp, "SUCCESS", null, null, System.currentTimeMillis() - start);
         return toResponse(llmResp);
@@ -577,8 +585,24 @@ public class StrategyService {
                 asMap(m.get("measurementPlan")),
                 asList(m.get("risksAndMitigations")),
                 asMap(m.get("first14DaysLearningPlan")),
-                m.get("humanReadablePlanMarkdown") != null ? m.get("humanReadablePlanMarkdown").toString() : null
+                m.get("humanReadablePlanMarkdown") != null ? m.get("humanReadablePlanMarkdown").toString() : null,
+                asList(m.get("winnerInsights")),
+                asStringList(m.get("optimizationSignals")),
+                asStringList(m.get("recommendedNextCreativeMoves"))
         );
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<String> asStringList(Object o) {
+        if (o == null) return null;
+        if (o instanceof List<?> list) {
+            List<String> result = new ArrayList<>();
+            for (Object item : list) {
+                result.add(item != null ? item.toString() : null);
+            }
+            return result;
+        }
+        return null;
     }
 
     @SuppressWarnings("unchecked")
@@ -810,11 +834,12 @@ public class StrategyService {
         try (Connection c = ds.getConnection(); PreparedStatement ps = c.prepareStatement(
                 "SELECT cap.creative_asset_id, cap.platform, " +
                 "COALESCE(SUM(cap.impressions),0), COALESCE(SUM(cap.clicks),0), " +
-                "COALESCE(SUM(cap.conversions),0), COALESCE(AVG(cap.roas),0), ca.metadata_json " +
+                "COALESCE(SUM(cap.conversions),0), COALESCE(AVG(cap.roas),0), ca.metadata_json, " +
+                "cap.classification, cap.performance_score, cap.confidence_score " +
                 "FROM creative_asset_performance cap JOIN creative_assets ca ON ca.id=cap.creative_asset_id " +
                 "WHERE cap.business_id=? AND cap.recorded_at>=? " +
-                "GROUP BY cap.creative_asset_id, cap.platform, ca.metadata_json " +
-                "HAVING COALESCE(SUM(cap.impressions),0) >= 3000 AND COALESCE(AVG(cap.roas),0) >= 2.0 " +
+                "AND (cap.classification='WINNER' OR (cap.classification IS NULL AND COALESCE(SUM(cap.impressions),0) >= 3000 AND COALESCE(AVG(cap.roas),0) >= 2.0)) " +
+                "GROUP BY cap.creative_asset_id, cap.platform, ca.metadata_json, cap.classification, cap.performance_score, cap.confidence_score " +
                 "ORDER BY 6 DESC LIMIT 5")) {
             ps.setObject(1, businessId);
             ps.setTimestamp(2, Timestamp.from(Instant.now().minus(30, ChronoUnit.DAYS)));
@@ -827,6 +852,9 @@ public class StrategyService {
                 m.put("clicks", rs.getLong(4));
                 m.put("conversions", rs.getLong(5));
                 m.put("avgRoas", rs.getBigDecimal(6));
+                m.put("classification", rs.getString(8));
+                m.put("performanceScore", rs.getDouble(9));
+                m.put("confidenceScore", rs.getDouble(10));
                 String metaJson = rs.getString(7);
                 if (metaJson != null && !metaJson.isBlank()) {
                     try {
@@ -844,6 +872,43 @@ public class StrategyService {
         return out;
     }
 
+    private List<Map<String, Object>> assetLosers(UUID businessId) {
+        List<Map<String, Object>> out = new ArrayList<>();
+        try (Connection c = ds.getConnection(); PreparedStatement ps = c.prepareStatement(
+                "SELECT cap.creative_asset_id, cap.platform, " +
+                "COALESCE(SUM(cap.impressions),0), COALESCE(SUM(cap.clicks),0), " +
+                "COALESCE(SUM(cap.conversions),0), COALESCE(AVG(cap.roas),0), ca.metadata_json " +
+                "FROM creative_asset_performance cap JOIN creative_assets ca ON ca.id=cap.creative_asset_id " +
+                "WHERE cap.business_id=? AND cap.recorded_at>=? AND cap.classification='WEAK' " +
+                "GROUP BY cap.creative_asset_id, cap.platform, ca.metadata_json " +
+                "ORDER BY 6 ASC LIMIT 5")) {
+            ps.setObject(1, businessId);
+            ps.setTimestamp(2, Timestamp.from(Instant.now().minus(30, ChronoUnit.DAYS)));
+            ResultSet rs = ps.executeQuery();
+            while (rs.next()) {
+                Map<String, Object> m = new HashMap<>();
+                m.put("assetId", rs.getObject(1).toString());
+                m.put("platform", rs.getString(2));
+                m.put("impressions", rs.getLong(3));
+                m.put("clicks", rs.getLong(4));
+                m.put("conversions", rs.getLong(5));
+                m.put("avgRoas", rs.getBigDecimal(6));
+                String metaJson = rs.getString(7);
+                if (metaJson != null && !metaJson.isBlank()) {
+                    try {
+                        Map<String, Object> meta = om.readValue(metaJson, new com.fasterxml.jackson.core.type.TypeReference<>() {});
+                        m.put("hook", meta.get("hook"));
+                        m.put("visualStyle", meta.get("visualStyle"));
+                    } catch (Exception ignored) {}
+                }
+                out.add(m);
+            }
+        } catch (Exception e) {
+            log.warn("Failed to query asset losers: {}", e.getMessage());
+        }
+        return out;
+    }
+
     private List<Map<String, Object>> buildWinnerInsights(List<Map<String, Object>> assetWinners) {
         List<Map<String, Object>> insights = new ArrayList<>();
         for (Map<String, Object> aw : assetWinners) {
@@ -852,6 +917,9 @@ public class StrategyService {
             insight.put("platform", aw.get("platform"));
             insight.put("roas", aw.get("avgRoas"));
             insight.put("conversions", aw.get("conversions"));
+            if (aw.get("classification") != null) insight.put("classification", aw.get("classification"));
+            if (aw.get("performanceScore") != null) insight.put("performanceScore", aw.get("performanceScore"));
+            if (aw.get("confidenceScore") != null) insight.put("confidenceScore", aw.get("confidenceScore"));
             if (aw.get("hook") != null) insight.put("winningHook", aw.get("hook"));
             if (aw.get("visualStyle") != null) insight.put("winningStyle", aw.get("visualStyle"));
             if (aw.get("emotionalAngle") != null) insight.put("winningAngle", aw.get("emotionalAngle"));
@@ -861,6 +929,10 @@ public class StrategyService {
     }
 
     private List<String> buildCreativeMoves(List<Map<String, Object>> assetWinners) {
+        return buildCreativeMoves(assetWinners, List.of());
+    }
+
+    private List<String> buildCreativeMoves(List<Map<String, Object>> assetWinners, List<Map<String, Object>> assetLosersList) {
         List<String> moves = new ArrayList<>();
         if (!assetWinners.isEmpty()) {
             moves.add("Scale budget on " + assetWinners.size() + " winning creative asset(s)");
@@ -873,6 +945,16 @@ public class StrategyService {
                 moves.add("Test variations of winning hook pattern: '" + best.get("hook") + "'");
             }
             moves.add("Pause or rework assets not meeting ROAS threshold of 2.0");
+        }
+        if (!assetLosersList.isEmpty()) {
+            for (Map<String, Object> loser : assetLosersList) {
+                if (loser.get("hook") != null) {
+                    moves.add("Avoid hook pattern: '" + loser.get("hook") + "' — underperforming with ROAS " + loser.get("avgRoas"));
+                }
+                if (loser.get("visualStyle") != null) {
+                    moves.add("De-prioritize '" + loser.get("visualStyle") + "' visual style — weak performance");
+                }
+            }
         }
         return moves;
     }

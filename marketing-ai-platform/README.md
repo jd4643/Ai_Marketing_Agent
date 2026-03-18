@@ -928,3 +928,99 @@ cd analytics-service && mvn test
 #   MetaCreativeAssetMapperTest — metadata match, name match, threshold filtering, best-match selection
 ```
 
+---
+
+## Winner Detection + Optimization Recommendations Engine
+
+### Overview
+The platform now includes a deterministic scoring engine that classifies every creative asset as **WINNER**, **WEAK**, **TESTING**, or **INSUFFICIENT_DATA** based on aggregated performance metrics, and generates actionable optimization recommendations.
+
+### Classification Thresholds (configurable via environment)
+| Classification | Rule |
+|---|---|
+| `INSUFFICIENT_DATA` | impressions < `CREATIVE_WINNER_MIN_IMPRESSIONS` (default 3000) |
+| `WINNER` | ROAS ≥ `CREATIVE_WINNER_MIN_ROAS` (2.0) AND clicks ≥ `CREATIVE_WINNER_MIN_CLICKS` (100) AND conversions ≥ `CREATIVE_WINNER_MIN_CONVERSIONS` (3) |
+| `WEAK` | ROAS ≤ `CREATIVE_WEAK_MAX_ROAS` (0.8) with sufficient data |
+| `TESTING` | Everything else (metrics between weak and winner thresholds) |
+
+### Performance Score (0–100)
+Weighted composite: CTR (25%), ROAS (35%), conversions (25%), CPA efficiency (15%).
+
+### Confidence Score (0–1)
+Based on volume sufficiency (impressions/clicks/conversions relative to thresholds) and signal consistency (do all metrics point the same direction).
+
+### New Analytics Endpoints
+
+```bash
+# Get winners
+curl 'localhost:8080/analytics/creative-assets/winners?businessId=<uuid>&days=30&limit=50'
+
+# Get underperformers
+curl 'localhost:8080/analytics/creative-assets/losers?businessId=<uuid>&days=30'
+
+# Get assets still in testing
+curl 'localhost:8080/analytics/creative-assets/testing?businessId=<uuid>&days=30'
+
+# Full scorecard (counts by classification)
+curl 'localhost:8080/analytics/creative-assets/scorecard?businessId=<uuid>&days=30'
+
+# Optimization recommendations (SCALE / STOP / TEST_MORE / DUPLICATE_WINNER / ADAPT_FOR_PLATFORM)
+curl 'localhost:8080/analytics/creative-assets/recommendations?businessId=<uuid>&days=30'
+
+# Detailed insights with breakdown and best/worst metrics
+curl 'localhost:8080/analytics/creative-assets/insights?businessId=<uuid>&days=30'
+
+# Force reclassification of all assets
+curl -X POST 'localhost:8080/analytics/creative-assets/recompute?businessId=<uuid>&days=30'
+```
+
+### Automatic Scoring
+- **On ingest:** `POST /analytics/creative-assets/metrics/ingest` now computes classification, performance score, confidence score, and reasoning JSON for each ingested metric.
+- **On sync:** `POST /analytics/integrations/meta/sync` automatically reclassifies all assets and generates fresh recommendations after each Meta Ads sync.
+
+### Cross-Service Integration
+
+**strategy-service:**
+- Winner insights now include `classification`, `performanceScore`, and `confidenceScore`.
+- Weak assets generate `optimizationSignals` in the strategy response.
+- `recommendedNextCreativeMoves` include actions to avoid weak patterns and scale winners.
+
+**creative-service:**
+- Weak creative patterns are injected into the prompt as "AVOID THESE PATTERNS".
+- Response includes `avoidsWeakPatterns: true` when weak-pattern avoidance is active.
+
+**generation-service:**
+- Three new variation types: `similar`, `fresh-angle`, `platform-adapted`.
+- `POST /generate/from-winner` response now includes `winnerClassification`, `winnerPerformanceScore`, `winnerConfidenceScore`.
+
+### Environment Variables
+| Variable | Default | Description |
+|---|---|---|
+| `CREATIVE_WINNER_MIN_IMPRESSIONS` | `3000` | Minimum impressions for classification |
+| `CREATIVE_WINNER_MIN_CLICKS` | `100` | Minimum clicks for WINNER |
+| `CREATIVE_WINNER_MIN_CONVERSIONS` | `3` | Minimum conversions for WINNER |
+| `CREATIVE_WINNER_MIN_ROAS` | `2.0` | Minimum ROAS for WINNER |
+| `CREATIVE_WEAK_MAX_ROAS` | `0.8` | Maximum ROAS before WEAK classification |
+| `CREATIVE_MIN_CONFIDENCE` | `0.60` | Minimum confidence to trust a classification |
+
+### Database Migration
+Flyway `V6__winner_detection.sql` adds:
+- `performance_score`, `classification`, `confidence_score`, `reasoning_json`, `updated_at` columns to `creative_asset_performance`
+- `creative_optimization_recommendations` table with indexes on business_id, status, and created_at
+
+### Testing Phase 5
+```bash
+# Analytics service — 62 tests
+cd analytics-service && mvn clean test
+
+# Generation service — 32 tests
+cd generation-service && python3 -m pytest test_app.py -v
+
+# New test classes:
+#   CreativeWinnerScoringServiceTest — classify, performanceScore, confidence, buildReasoning, scoreAllAssets
+#   CreativeOptimizationRecommendationServiceTest — empty, SCALE, STOP, TEST_MORE, mixed, persist, fields
+#   CreativeAssetPerformanceControllerTest — all 7 endpoints, classifyDelegation, data assertions
+#   TestVariationPromptBuilder — similar, fresh-angle, platform-adapted, classification in prompt
+#   TestFromWinnerResponseClassification — classification fields in response
+```
+
