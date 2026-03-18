@@ -1024,3 +1024,88 @@ cd generation-service && python3 -m pytest test_app.py -v
 #   TestFromWinnerResponseClassification — classification fields in response
 ```
 
+---
+
+## Phase 6 — Recommendation Action Layer
+
+Recommendations are now operational. Users can apply, dismiss, generate creative variants from, and export launch-ready packages from any recommendation.
+
+### Recommendation Lifecycle
+
+```
+  OPEN ─── apply()  ──> APPLIED
+  OPEN ─── dismiss() ──> DISMISSED
+```
+
+- **Apply** marks the recommendation as acted-on with a timestamp. Idempotent.
+- **Dismiss** marks it as rejected. Idempotent.
+- Transitions are one-way: APPLIED cannot be dismissed, DISMISSED cannot be applied.
+
+### New Endpoints
+
+| Method | Path | Description |
+|--------|------|-------------|
+| POST | `/analytics/recommendations/{id}/apply` | Mark recommendation as APPLIED |
+| POST | `/analytics/recommendations/{id}/dismiss` | Mark recommendation as DISMISSED |
+| GET | `/analytics/recommendations/{id}` | Get full detail with available actions |
+| GET | `/analytics/recommendations?businessId=&status=&days=30` | List recommendations with optional filters |
+| GET | `/analytics/recommendations/dashboard?businessId=` | Dashboard view grouped by priority |
+| GET | `/analytics/recommendations/{id}/export-launch-package?businessId=` | Export execution-ready launch package |
+| POST | `/generate/creative-assets/from-recommendation` | Generate new assets based on a recommendation |
+
+### Example: Apply a Recommendation
+```bash
+curl -X POST http://localhost:8080/analytics/recommendations/{recId}/apply
+```
+
+### Example: Dashboard
+```bash
+curl "http://localhost:8080/analytics/recommendations/dashboard?businessId={businessId}"
+```
+
+Returns recommendations grouped by HIGH / MEDIUM / LOW priority, each with `availableActions` (APPLY, DISMISS, GENERATE_VARIANTS, EXPORT_PACKAGE).
+
+### Example: Generate Variants from Recommendation
+```bash
+curl -X POST http://localhost:8080/generate/creative-assets/from-recommendation \
+  -H "Content-Type: application/json" \
+  -d '{"recommendationId":"<uuid>","count":3,"variationMode":"similar"}'
+```
+
+`variationMode` options: `similar`, `fresh-angle`, `platform-adapted`.
+
+STOP recommendations are blocked from generation unless `metadata_json.allow_generate` is true.
+
+### Example: Export Launch Package
+```bash
+curl "http://localhost:8080/analytics/recommendations/{recId}/export-launch-package?businessId={businessId}"
+```
+
+Returns a ready-to-execute package with: `campaignName`, `platform`, `objective`, `budgetGuidance`, `targetingGuidance`, `copy` (headline/primaryText/cta), `assetLinks`, `landingPageGuidance`, `trackingChecklist`, `notes`.
+
+### Strategy & Creative Awareness
+
+Both `strategy-service` and `creative-service` now query open recommendations and inject them as optimization signals into their LLM prompts. This means generated strategies and creative concepts are influenced by the recommendation engine's findings.
+
+### Database Migration
+
+Flyway `V7__recommendation_action_layer.sql` adds:
+- `suggested_next_action`, `applied_at`, `dismissed_at`, `metadata_json`, `updated_at` columns to `creative_optimization_recommendations`
+- Index on `created_at` for time-range queries
+
+### Testing Phase 6
+```bash
+# Analytics service — 100 tests
+cd analytics-service && mvn clean test
+
+# Generation service — 45 tests
+cd generation-service && python3 -m pytest test_app.py -v
+
+# New test classes:
+#   RecommendationActionControllerTest — apply, dismiss, detail, list, dashboard, export-launch-package (16 tests)
+#   RecommendationActionServiceTest — apply/dismiss lifecycle, idempotency, dashboard grouping, export launch package (22 tests)
+#   TestFromRecommendationValidation — missing fields, invalid modes, count limits
+#   TestFromRecommendationEndpoint — stubbed generation, not-found, STOP blocking, STOP allowed via metadata, platform override
+#   TestRecommendationPromptBuilder — type-specific directives, winning context, performance data
+```
+

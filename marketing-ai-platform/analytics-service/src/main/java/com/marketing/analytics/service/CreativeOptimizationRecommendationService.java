@@ -201,6 +201,7 @@ public class CreativeOptimizationRecommendationService {
             entity.setPriority(r.priority());
             entity.setTitle(r.title());
             entity.setDescription(r.description());
+            entity.setSuggestedNextAction(r.suggestedNextAction());
             try {
                 entity.setReasoningJson(om.writeValueAsString(r.reasoning()));
             } catch (Exception e) {
@@ -208,6 +209,7 @@ public class CreativeOptimizationRecommendationService {
             }
             entity.setStatus("OPEN");
             entity.setCreatedAt(Instant.now());
+            entity.setUpdatedAt(Instant.now());
             recRepo.save(entity);
         }
 
@@ -222,27 +224,70 @@ public class CreativeOptimizationRecommendationService {
         Instant since = Instant.now().minus(days, ChronoUnit.DAYS);
         List<CreativeOptimizationRecommendation> entities =
                 recRepo.findByBusinessIdAndCreatedAtAfterOrderByCreatedAtDesc(businessId, since);
-        List<Map<String, Object>> result = new ArrayList<>();
-        for (CreativeOptimizationRecommendation e : entities) {
-            Map<String, Object> item = new LinkedHashMap<>();
-            item.put("id", e.getId());
-            item.put("recommendationType", e.getRecommendationType());
-            item.put("priority", e.getPriority());
-            item.put("title", e.getTitle());
-            item.put("description", e.getDescription());
-            item.put("relatedCreativeAssetId", e.getCreativeAssetId());
-            item.put("status", e.getStatus());
-            item.put("createdAt", e.getCreatedAt());
-            if (e.getReasoningJson() != null) {
-                try {
-                    item.put("reasoning", om.readValue(e.getReasoningJson(), new TypeReference<Map<String, Object>>() {}));
-                } catch (Exception ex) {
-                    item.put("reasoning", e.getReasoningJson());
-                }
+        return entities.stream().map(this::entityToMap).toList();
+    }
+
+    /**
+     * Fetch persisted recommendations for a business filtered by status.
+     */
+    public List<Map<String, Object>> getPersistedRecommendations(UUID businessId, String status, int days) {
+        if (status == null || status.isBlank()) return getPersistedRecommendations(businessId, days);
+        Instant since = Instant.now().minus(days, ChronoUnit.DAYS);
+        List<CreativeOptimizationRecommendation> entities =
+                recRepo.findByBusinessIdAndStatusAndCreatedAtAfterOrderByCreatedAtDesc(businessId, status, since);
+        return entities.stream().map(this::entityToMap).toList();
+    }
+
+    /**
+     * Build available actions for a recommendation based on its current status and type.
+     */
+    public List<String> availableActions(CreativeOptimizationRecommendation rec) {
+        List<String> actions = new ArrayList<>();
+        if ("OPEN".equals(rec.getStatus())) {
+            actions.add("APPLY");
+            actions.add("DISMISS");
+            if (!"STOP".equals(rec.getRecommendationType())) {
+                actions.add("GENERATE_VARIANTS");
             }
-            result.add(item);
+            actions.add("EXPORT_PACKAGE");
         }
-        return result;
+        return actions;
+    }
+
+    /**
+     * Convert entity to enriched map with available actions.
+     */
+    public Map<String, Object> entityToMap(CreativeOptimizationRecommendation e) {
+        Map<String, Object> item = new LinkedHashMap<>();
+        item.put("id", e.getId());
+        item.put("businessId", e.getBusinessId());
+        item.put("recommendationType", e.getRecommendationType());
+        item.put("priority", e.getPriority());
+        item.put("title", e.getTitle());
+        item.put("description", e.getDescription());
+        item.put("relatedCreativeAssetId", e.getCreativeAssetId());
+        item.put("status", e.getStatus());
+        item.put("suggestedNextAction", e.getSuggestedNextAction());
+        item.put("appliedAt", e.getAppliedAt());
+        item.put("dismissedAt", e.getDismissedAt());
+        item.put("createdAt", e.getCreatedAt());
+        item.put("updatedAt", e.getUpdatedAt());
+        if (e.getReasoningJson() != null) {
+            try {
+                item.put("reasoning", om.readValue(e.getReasoningJson(), new TypeReference<Map<String, Object>>() {}));
+            } catch (Exception ex) {
+                item.put("reasoning", e.getReasoningJson());
+            }
+        }
+        if (e.getMetadataJson() != null) {
+            try {
+                item.put("metadata", om.readValue(e.getMetadataJson(), new TypeReference<Map<String, Object>>() {}));
+            } catch (Exception ex) {
+                item.put("metadata", e.getMetadataJson());
+            }
+        }
+        item.put("availableActions", availableActions(e));
+        return item;
     }
 
     private Map<String, Object> buildMetrics(ScoringResult sr) {

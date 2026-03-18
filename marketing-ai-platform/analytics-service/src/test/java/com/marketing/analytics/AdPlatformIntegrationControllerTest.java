@@ -16,6 +16,7 @@ import com.marketing.analytics.repo.CreativeOptimizationRecommendationRepository
 import com.marketing.analytics.service.AdPlatformIntegrationService;
 import com.marketing.analytics.service.CreativeOptimizationRecommendationService;
 import com.marketing.analytics.service.CreativeWinnerScoringService;
+import com.marketing.analytics.service.RecommendationActionService;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -37,6 +38,7 @@ class AdPlatformIntegrationControllerTest {
     @MockBean AdPlatformIntegrationService service;
     @MockBean CreativeWinnerScoringService scoringService;
     @MockBean CreativeOptimizationRecommendationService recommendationService;
+    @MockBean RecommendationActionService actionService;
 
     // ─── Connect ────────────────────────────────────────────────────────
 

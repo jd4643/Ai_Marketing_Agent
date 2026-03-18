@@ -12,5 +12,9 @@ public interface CreativeOptimizationRecommendationRepository extends JpaReposit
 
     List<CreativeOptimizationRecommendation> findByBusinessIdAndStatusOrderByCreatedAtDesc(UUID businessId, String status);
 
+    List<CreativeOptimizationRecommendation> findByBusinessIdOrderByCreatedAtDesc(UUID businessId);
+
+    List<CreativeOptimizationRecommendation> findByBusinessIdAndStatusAndCreatedAtAfterOrderByCreatedAtDesc(UUID businessId, String status, Instant since);
+
     void deleteByBusinessIdAndStatus(UUID businessId, String status);
 }

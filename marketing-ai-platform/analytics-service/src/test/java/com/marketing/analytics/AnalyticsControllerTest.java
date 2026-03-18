@@ -13,6 +13,7 @@ import com.marketing.analytics.repo.CreativeOptimizationRecommendationRepository
 import com.marketing.analytics.service.AdPlatformIntegrationService;
 import com.marketing.analytics.service.CreativeOptimizationRecommendationService;
 import com.marketing.analytics.service.CreativeWinnerScoringService;
+import com.marketing.analytics.service.RecommendationActionService;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -31,6 +32,7 @@ class AnalyticsControllerTest {
   @MockBean AdPlatformIntegrationService integrationService;
   @MockBean CreativeWinnerScoringService scoringService;
   @MockBean CreativeOptimizationRecommendationService recommendationService;
+  @MockBean RecommendationActionService actionService;
 
   @Test void ingestValidation() throws Exception {
     mvc.perform(post("/analytics/metrics/ingest").contentType(MediaType.APPLICATION_JSON).content("{}"))

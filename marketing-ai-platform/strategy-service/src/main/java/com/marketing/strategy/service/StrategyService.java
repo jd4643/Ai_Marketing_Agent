@@ -62,6 +62,7 @@ public class StrategyService {
         List<Map<String, Object>> winners = winners(req.businessId());
         List<Map<String, Object>> assetWinnersList = assetWinners(req.businessId());
         List<Map<String, Object>> assetLosersList = assetLosers(req.businessId());
+        List<Map<String, Object>> openRecommendations = openRecommendations(req.businessId());
 
         // Cold start = no performance history + no creative winners yet
         boolean coldStart = (metrics == null || metrics.isEmpty())
@@ -154,6 +155,22 @@ public class StrategyService {
                 weakSignals.add("Weak asset " + loser.get("assetId") + " on " + loser.get("platform") + " (ROAS=" + loser.get("avgRoas") + ") — consider pausing");
             }
             llmResp.put("optimizationSignals", weakSignals);
+        }
+        // Inject open recommendation signals for strategy awareness
+        if (!openRecommendations.isEmpty()) {
+            List<String> recSignals = new ArrayList<>();
+            for (Map<String, Object> rec : openRecommendations) {
+                recSignals.add("[" + rec.get("type") + "/" + rec.get("priority") + "] " + rec.get("title"));
+            }
+            Object existing = llmResp.get("optimizationSignals");
+            if (existing instanceof List<?> existingList) {
+                List<String> merged = new ArrayList<>();
+                for (Object item : existingList) merged.add(item.toString());
+                merged.addAll(recSignals);
+                llmResp.put("optimizationSignals", merged);
+            } else {
+                llmResp.put("optimizationSignals", recSignals);
+            }
         }
         saveHistory(requestId, req, prompt, llmResp, "SUCCESS", null, null, System.currentTimeMillis() - start);
         return toResponse(llmResp);
@@ -1057,6 +1074,29 @@ public class StrategyService {
                 out.add(new HistorySummary((UUID) rs.getObject(1), rs.getString(2), rs.getBigDecimal(3), rs.getString(4), rs.getTimestamp(5).toInstant()));
         } catch (Exception e) {
             throw new RuntimeException(e);
+        }
+        return out;
+    }
+
+    private List<Map<String, Object>> openRecommendations(UUID businessId) {
+        List<Map<String, Object>> out = new ArrayList<>();
+        try (Connection c = ds.getConnection(); PreparedStatement ps = c.prepareStatement(
+                "SELECT recommendation_type, priority, title, creative_asset_id " +
+                "FROM creative_optimization_recommendations " +
+                "WHERE business_id=? AND status='OPEN' " +
+                "ORDER BY CASE priority WHEN 'HIGH' THEN 1 WHEN 'MEDIUM' THEN 2 ELSE 3 END, created_at DESC LIMIT 10")) {
+            ps.setObject(1, businessId);
+            ResultSet rs = ps.executeQuery();
+            while (rs.next()) {
+                Map<String, Object> m = new HashMap<>();
+                m.put("type", rs.getString(1));
+                m.put("priority", rs.getString(2));
+                m.put("title", rs.getString(3));
+                m.put("assetId", rs.getObject(4));
+                out.add(m);
+            }
+        } catch (Exception e) {
+            log.warn("Failed to query open recommendations: {}", e.getMessage());
         }
         return out;
     }

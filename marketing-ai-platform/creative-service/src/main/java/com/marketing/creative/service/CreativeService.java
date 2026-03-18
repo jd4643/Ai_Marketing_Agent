@@ -14,9 +14,10 @@ public class CreativeService {
   List<Map<String,Object>> winners=winners(req.businessId());
   List<Map<String,Object>> assetWinnersList=assetWinners(req.businessId());
   List<Map<String,Object>> assetLosersList=assetLosers(req.businessId());
+  List<Map<String,Object>> openRecs=openRecommendations(req.businessId());
   String strategySummary=req.strategyRequestId()!=null?strategy(req.strategyRequestId()):"none";
   Map<String,Object> out;
-  try{out=openai(req,requestId,business,trends,winners,strategySummary,assetWinnersList,assetLosersList);}catch(Exception e){
+  try{out=openai(req,requestId,business,trends,winners,strategySummary,assetWinnersList,assetLosersList,openRecs);}catch(Exception e){
     log.warn("OpenAI creative generation failed, using fallback: {}", e.getMessage());
     out=fallback(req,requestId,trends,business);
   }
@@ -38,8 +39,8 @@ public class CreativeService {
   storeCreative(req.businessId(),req.platform(),req.format(), ((List<Map<String,Object>>)out.get("creativeConcepts")).get(0).get("performanceAngle").toString(), ((List<Map<String,Object>>)out.get("creativeConcepts")).get(0).get("hook").toString());
   return out;
  }
- private Map<String,Object> openai(GenerateRequest req,UUID requestId,Map<String,Object> business,List<String> trends,List<Map<String,Object>> winners,String strategy,List<Map<String,Object>> assetWinners,List<Map<String,Object>> assetLosers) throws Exception {
-  String prompt = buildCreativeDirectorPrompt(req, business, trends, winners, strategy, assetWinners, assetLosers);
+ private Map<String,Object> openai(GenerateRequest req,UUID requestId,Map<String,Object> business,List<String> trends,List<Map<String,Object>> winners,String strategy,List<Map<String,Object>> assetWinners,List<Map<String,Object>> assetLosers,List<Map<String,Object>> openRecs) throws Exception {
+  String prompt = buildCreativeDirectorPrompt(req, business, trends, winners, strategy, assetWinners, assetLosers, openRecs);
   if(apiKey==null||apiKey.isBlank()) throw new IllegalStateException("OpenAI API key not configured");
   String json=om.writeValueAsString(Map.of("model",model,"response_format",Map.of("type","json_object"),"messages",List.of(Map.of("role","system","content",SYSTEM_PROMPT),Map.of("role","user","content",prompt))));
   Request r=new Request.Builder().url("https://api.openai.com/v1/chat/completions").addHeader("Authorization","Bearer "+apiKey).post(RequestBody.create(json,MediaType.get("application/json"))).build();
@@ -58,7 +59,7 @@ public class CreativeService {
    "Each aiImagePrompt must be a complete, visually descriptive generation prompt including scene, lighting, composition, mood, product placement, and style. " +
    "Each aiVideoPrompt must describe the video concept in enough detail to produce a 15-30 second ad.";
 
- private String buildCreativeDirectorPrompt(GenerateRequest req, Map<String,Object> business, List<String> trends, List<Map<String,Object>> winners, String strategy, List<Map<String,Object>> assetWinners, List<Map<String,Object>> assetLosers) {
+ private String buildCreativeDirectorPrompt(GenerateRequest req, Map<String,Object> business, List<String> trends, List<Map<String,Object>> winners, String strategy, List<Map<String,Object>> assetWinners, List<Map<String,Object>> assetLosers, List<Map<String,Object>> openRecs) {
    StringBuilder sb = new StringBuilder();
    sb.append("## BUSINESS CONTEXT\n");
    sb.append("Business: ").append(business.get("businessName")).append("\n");
@@ -109,6 +110,15 @@ public class CreativeService {
 
    if (!"none".equals(strategy)) {
      sb.append("## STRATEGY CONTEXT\n").append(strategy).append("\n\n");
+   }
+
+   if (openRecs != null && !openRecs.isEmpty()) {
+     sb.append("## OPEN OPTIMIZATION RECOMMENDATIONS\n");
+     sb.append("The analytics engine has detected these actionable opportunities. Incorporate them:\n");
+     for (Map<String,Object> r : openRecs) {
+       sb.append("- [").append(r.get("type")).append("/").append(r.get("priority")).append("] ").append(r.get("title")).append("\n");
+     }
+     sb.append("\n");
    }
 
    sb.append("## OUTPUT REQUIREMENTS\n");
@@ -348,4 +358,23 @@ public class CreativeService {
  }
  private String strategy(UUID rid){ try(Connection c=ds.getConnection(); PreparedStatement ps=c.prepareStatement("SELECT response_json::text FROM strategy_history WHERE request_id=? ORDER BY created_at DESC LIMIT 1")){ps.setObject(1,rid); ResultSet rs=ps.executeQuery(); if(rs.next()) return rs.getString(1);}catch(Exception e){throw new RuntimeException(e);} return "none"; }
  private void storeCreative(UUID businessId,String platform,String format,String angle,String hook){ try(Connection c=ds.getConnection(); PreparedStatement ps=c.prepareStatement("INSERT INTO creatives(id,business_id,platform,format,angle,hook,performance_score,created_at) VALUES (?,?,?,?,?,?,NULL,?)")){ps.setObject(1,UUID.randomUUID());ps.setObject(2,businessId);ps.setString(3,platform);ps.setString(4,format);ps.setString(5,angle);ps.setString(6,hook);ps.setTimestamp(7,Timestamp.from(Instant.now())); ps.executeUpdate();}catch(Exception e){throw new RuntimeException(e);} }
+ private List<Map<String,Object>> openRecommendations(UUID businessId){
+  List<Map<String,Object>> out=new ArrayList<>();
+  try(Connection c=ds.getConnection(); PreparedStatement ps=c.prepareStatement(
+    "SELECT recommendation_type, priority, title, creative_asset_id FROM creative_optimization_recommendations " +
+    "WHERE business_id=? AND status='OPEN' ORDER BY CASE priority WHEN 'HIGH' THEN 1 WHEN 'MEDIUM' THEN 2 ELSE 3 END, created_at DESC LIMIT 10")){
+   ps.setObject(1,businessId);
+   ResultSet rs=ps.executeQuery();
+   while(rs.next()){
+    Map<String,Object> m=new LinkedHashMap<>();
+    m.put("type",rs.getString(1));
+    m.put("priority",rs.getString(2));
+    m.put("title",rs.getString(3));
+    Object assetId=rs.getObject(4);
+    if(assetId!=null) m.put("assetId",assetId.toString());
+    out.add(m);
+   }
+  }catch(Exception e){log.warn("Failed to query open recommendations: {}",e.getMessage());}
+  return out;
+ }
 }

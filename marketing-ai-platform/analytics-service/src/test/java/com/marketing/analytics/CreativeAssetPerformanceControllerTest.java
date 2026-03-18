@@ -18,6 +18,7 @@ import com.marketing.analytics.service.CreativeWinnerScoringService;
 import com.marketing.analytics.service.CreativeWinnerScoringService.ScoringResult;
 import com.marketing.analytics.service.CreativeOptimizationRecommendationService;
 import com.marketing.analytics.service.CreativeOptimizationRecommendationService.RecommendationResult;
+import com.marketing.analytics.service.RecommendationActionService;
 import java.math.BigDecimal;
 import java.util.*;
 import org.junit.jupiter.api.Test;
@@ -36,6 +37,7 @@ class CreativeAssetPerformanceControllerTest {
     @MockBean AdPlatformIntegrationService integrationService;
     @MockBean CreativeWinnerScoringService scoringService;
     @MockBean CreativeOptimizationRecommendationService recommendationService;
+    @MockBean RecommendationActionService actionService;
 
     @Test void ingestValidation() throws Exception {
         mvc.perform(post("/analytics/creative-assets/metrics/ingest")

@@ -476,6 +476,12 @@ class FromWinnerRequest(BaseModel):
     size: Optional[str] = "1024x1024"
 
 
+class FromRecommendationRequest(BaseModel):
+    recommendationId: str
+    count: int = Field(default=3, ge=1, le=4)
+    variationMode: str = Field(default="similar", pattern=r"^(similar|fresh-angle|platform-adapted)$")
+
+
 def _query_winner_asset(asset_id: str) -> Optional[dict]:
     """Fetch a creative asset and its performance data for winner-based generation."""
     with _get_connection() as conn:
@@ -711,6 +717,243 @@ def generate_from_winner(req: FromWinnerRequest, request: Request):
         "winnerClassification": winner.get("classification"),
         "winnerPerformanceScore": float(winner["performance_score"]) if winner.get("performance_score") else None,
         "winnerConfidenceScore": float(winner["confidence_score"]) if winner.get("confidence_score") else None,
+        "assets": assets_response,
+    }
+
+
+# ---------------------------------------------------------------------------
+# From-Recommendation generation
+# ---------------------------------------------------------------------------
+
+def _query_recommendation(recommendation_id: str) -> Optional[dict]:
+    """Fetch a recommendation from the creative_optimization_recommendations table."""
+    try:
+        with _get_connection() as conn:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute(
+                    """SELECT id, business_id, creative_asset_id, recommendation_type,
+                              priority, title, description, reasoning_json,
+                              suggested_next_action, status, metadata_json
+                       FROM creative_optimization_recommendations
+                       WHERE id = %s""",
+                    (recommendation_id,),
+                )
+                row = cur.fetchone()
+                return dict(row) if row else None
+    except Exception as e:
+        logger.warning("Failed to fetch recommendation %s: %s", recommendation_id, e, extra={"request_id": "db"})
+        return None
+
+
+def _build_recommendation_prompt(
+    rec: dict,
+    winner: Optional[dict],
+    business_info: Optional[dict],
+    variation_mode: str,
+) -> str:
+    """Build a generation prompt informed by recommendation type and variation mode."""
+    rec_type = rec.get("recommendation_type", "")
+    parts: list[str] = []
+
+    # Core directive from recommendation type
+    type_directives = {
+        "SCALE": "Create closely related variants of this high-performing asset. Preserve the winning formula.",
+        "TEST_MORE": "Create controlled test variations. Change one variable at a time from the original.",
+        "DUPLICATE_WINNER": "Create similar variants that replicate the winning structure and approach.",
+        "ADAPT_FOR_PLATFORM": "Adapt this winning creative for a different platform while keeping core appeal.",
+    }
+    parts.append(type_directives.get(rec_type, "Create a new creative variant based on this recommendation."))
+
+    # Recommendation context
+    if rec.get("title"):
+        parts.append(f"Recommendation: {rec['title']}")
+    if rec.get("description"):
+        parts.append(f"Context: {rec['description']}")
+
+    # Source asset context if available
+    if winner:
+        original_prompt = winner.get("prompt_text", "")
+        if original_prompt:
+            parts.append(f"Original concept: {original_prompt}")
+
+        metadata = winner.get("metadata_json") or {}
+        if isinstance(metadata, str):
+            metadata = json.loads(metadata) if metadata else {}
+
+        if metadata.get("hook"):
+            parts.append(f"Winning hook: {metadata['hook']}")
+        if metadata.get("visualStyle"):
+            parts.append(f"Visual style: {metadata['visualStyle']}")
+        if metadata.get("emotionalAngle"):
+            parts.append(f"Emotional angle: {metadata['emotionalAngle']}")
+
+        perf = []
+        if winner.get("avg_roas"):
+            perf.append(f"ROAS: {winner['avg_roas']:.2f}")
+        if winner.get("total_conversions"):
+            perf.append(f"Conversions: {winner['total_conversions']}")
+        if perf:
+            parts.append(f"Performance: {', '.join(perf)}")
+
+    # Variation mode modifier
+    if variation_mode == "similar":
+        parts.append("Make subtle variations — different angle, slightly different copy, same winning formula.")
+    elif variation_mode == "fresh-angle":
+        parts.append("Same product, same audience, but entirely different creative angle and messaging approach.")
+    elif variation_mode == "platform-adapted":
+        parts.append("Optimize for the target platform's best practices, format, and audience behavior.")
+
+    # Business context
+    if business_info:
+        if business_info.get("product"):
+            parts.append(f"Product: {business_info['product']}")
+        if business_info.get("industry"):
+            parts.append(f"Industry: {business_info['industry']}")
+
+    parts.append("Professional advertising photography. Clean, brand-safe, commercial quality.")
+    return " | ".join(parts)
+
+
+@app.post("/generate/creative-assets/from-recommendation")
+def generate_from_recommendation(req: FromRecommendationRequest, request: Request):
+    """Generate new creative assets based on a recommendation."""
+    request_id = request.state.request_id
+    logger.info(
+        "Generate from recommendation recommendationId=%s variationMode=%s count=%d",
+        req.recommendationId, req.variationMode, req.count,
+        extra={"request_id": request_id},
+    )
+
+    # Fetch recommendation
+    rec = _query_recommendation(req.recommendationId)
+    if not rec:
+        return JSONResponse(status_code=404, content={
+            "requestId": request_id,
+            "error": "NOT_FOUND",
+            "message": f"Recommendation not found: {req.recommendationId}",
+            "details": {},
+        })
+
+    # Block generation from STOP recommendations unless metadata explicitly allows it
+    if rec.get("recommendation_type") == "STOP":
+        metadata = rec.get("metadata_json") or {}
+        if isinstance(metadata, str):
+            metadata = json.loads(metadata) if metadata else {}
+        if not metadata.get("allow_generate"):
+            return JSONResponse(status_code=400, content={
+                "requestId": request_id,
+                "error": "BAD_REQUEST",
+                "message": "Cannot generate from STOP recommendation unless explicitly allowed via metadata",
+                "details": {"recommendationType": "STOP"},
+            })
+
+    business_id = str(rec["business_id"])
+    business_info = _fetch_business(business_id)
+
+    # Fetch source creative asset if linked
+    winner = None
+    creative_asset_id = rec.get("creative_asset_id")
+    if creative_asset_id:
+        winner = _query_winner_asset(str(creative_asset_id))
+
+    # Determine asset type and platform
+    asset_type = "image"
+    platform = None
+    if winner:
+        asset_type = winner.get("asset_type", "image") or "image"
+        platform = winner.get("platform")
+
+    # For ADAPT_FOR_PLATFORM, override platform from recommendation title/description
+    if rec.get("recommendation_type") == "ADAPT_FOR_PLATFORM":
+        desc = (rec.get("description") or "").lower()
+        title = (rec.get("title") or "").lower()
+        for p in ["tiktok", "google", "youtube", "meta"]:
+            if f"for {p}" in desc or f"for {p}" in title:
+                platform = p
+                break
+
+    # Build generation prompt from recommendation context
+    final_prompt = _build_recommendation_prompt(rec, winner, business_info, req.variationMode)
+
+    # Prepare metadata for storage
+    meta_dict = {}
+    if winner:
+        winner_metadata = winner.get("metadata_json") or {}
+        if isinstance(winner_metadata, str):
+            winner_metadata = json.loads(winner_metadata) if winner_metadata else {}
+        meta_dict = dict(winner_metadata)
+    meta_dict["fromRecommendationId"] = req.recommendationId
+    meta_dict["recommendationType"] = rec.get("recommendation_type")
+    meta_dict["variationMode"] = req.variationMode
+    if creative_asset_id:
+        meta_dict["sourceAssetId"] = str(creative_asset_id)
+
+    assets_response = []
+    overall_status = "SUCCESS"
+    use_real_provider = _is_provider_configured() and asset_type == "image"
+
+    for i in range(req.count):
+        asset_id = str(uuid.uuid4())
+        provider = "STUB"
+        provider_asset_id = None
+        asset_url = None
+        thumbnail_url = None
+        status = "STUBBED"
+
+        if use_real_provider:
+            try:
+                results = _call_openai_image(final_prompt, "1024x1024", 1)
+                if results:
+                    provider = "OPENAI"
+                    asset_url = results[0].get("url")
+                    thumbnail_url = asset_url
+                    status = "SUCCESS"
+                else:
+                    status = "FAILED"
+                    overall_status = "FAILED"
+            except Exception as e:
+                logger.error("OpenAI image generation failed: %s", str(e), extra={"request_id": request_id})
+                status = "FAILED"
+                overall_status = "FAILED"
+        else:
+            if overall_status != "FAILED":
+                overall_status = "STUBBED"
+
+        _persist_asset(
+            asset_id=asset_id,
+            business_id=business_id,
+            creative_id=None,
+            strategy_request_id=None,
+            asset_type=asset_type,
+            platform=platform,
+            prompt_text=final_prompt,
+            provider=provider,
+            provider_asset_id=provider_asset_id,
+            asset_url=asset_url,
+            thumbnail_url=thumbnail_url,
+            status=status,
+            trend_context=None,
+            metadata=meta_dict,
+        )
+
+        assets_response.append({
+            "assetId": asset_id,
+            "assetType": asset_type,
+            "status": status,
+            "url": asset_url,
+            "thumbnailUrl": thumbnail_url,
+        })
+
+    logger.info(
+        "Generated %d assets from recommendation=%s status=%s",
+        len(assets_response), req.recommendationId, overall_status,
+        extra={"request_id": request_id},
+    )
+
+    return {
+        "requestId": request_id,
+        "recommendationId": req.recommendationId,
+        "status": overall_status,
         "assets": assets_response,
     }
 

@@ -563,5 +563,218 @@ class TestFromWinnerResponseClassification(unittest.TestCase):
         self.assertIsNone(data["winnerPerformanceScore"])
 
 
+class TestFromRecommendationValidation(unittest.TestCase):
+    def test_missing_recommendation_id(self):
+        resp = client.post("/generate/creative-assets/from-recommendation", json={})
+        self.assertEqual(resp.status_code, 422)
+
+    def test_invalid_variation_mode(self):
+        resp = client.post("/generate/creative-assets/from-recommendation", json={
+            "recommendationId": "550e8400-e29b-41d4-a716-446655440000",
+            "variationMode": "invalid-mode",
+        })
+        self.assertEqual(resp.status_code, 422)
+
+    def test_count_exceeds_max(self):
+        resp = client.post("/generate/creative-assets/from-recommendation", json={
+            "recommendationId": "550e8400-e29b-41d4-a716-446655440000",
+            "count": 10,
+        })
+        self.assertEqual(resp.status_code, 422)
+
+
+class TestFromRecommendationEndpoint(unittest.TestCase):
+    @patch("app._fetch_business")
+    @patch("app._persist_asset")
+    @patch("app._query_winner_asset")
+    @patch("app._query_recommendation")
+    @patch("app._is_provider_configured", return_value=False)
+    def test_stubbed_from_recommendation(self, mock_provider, mock_rec, mock_winner, mock_persist, mock_biz):
+        rec_id = "550e8400-e29b-41d4-a716-446655440000"
+        business_id = "660e8400-e29b-41d4-a716-446655440000"
+        asset_id = "770e8400-e29b-41d4-a716-446655440000"
+        mock_rec.return_value = {
+            "id": rec_id,
+            "business_id": business_id,
+            "creative_asset_id": asset_id,
+            "recommendation_type": "SCALE",
+            "priority": "HIGH",
+            "title": "Scale top performer",
+            "description": "Increase budget on this asset — ROAS is 3.5",
+            "reasoning_json": {"classification": "WINNER"},
+            "suggested_next_action": "Increase budget",
+            "status": "OPEN",
+            "metadata_json": None,
+        }
+        mock_winner.return_value = {
+            "id": asset_id,
+            "business_id": business_id,
+            "asset_type": "image",
+            "platform": "meta",
+            "prompt_text": "original winning prompt",
+            "metadata_json": {"hook": "Stop scrolling", "visualStyle": "UGC"},
+            "trend_context_json": None,
+            "total_impressions": 5000,
+            "total_clicks": 200,
+            "total_conversions": 10,
+            "avg_roas": 3.5,
+        }
+        mock_biz.return_value = {
+            "business_name": "TestBiz",
+            "industry": "jewelry",
+            "product": "rings",
+        }
+        resp = client.post("/generate/creative-assets/from-recommendation", json={
+            "recommendationId": rec_id,
+            "variationMode": "similar",
+            "count": 2,
+        })
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertEqual(data["status"], "STUBBED")
+        self.assertEqual(data["recommendationId"], rec_id)
+        self.assertEqual(len(data["assets"]), 2)
+        self.assertEqual(mock_persist.call_count, 2)
+
+    @patch("app._query_recommendation")
+    def test_recommendation_not_found(self, mock_rec):
+        mock_rec.return_value = None
+        resp = client.post("/generate/creative-assets/from-recommendation", json={
+            "recommendationId": "550e8400-e29b-41d4-a716-446655440000",
+        })
+        self.assertEqual(resp.status_code, 404)
+        self.assertIn("NOT_FOUND", resp.json()["error"])
+
+    @patch("app._query_recommendation")
+    def test_stop_recommendation_blocked(self, mock_rec):
+        mock_rec.return_value = {
+            "id": "550e8400-e29b-41d4-a716-446655440000",
+            "business_id": "660e8400-e29b-41d4-a716-446655440000",
+            "creative_asset_id": None,
+            "recommendation_type": "STOP",
+            "priority": "HIGH",
+            "title": "Stop underperformer",
+            "description": "Pause this asset",
+            "reasoning_json": {},
+            "suggested_next_action": "Pause",
+            "status": "OPEN",
+            "metadata_json": None,
+        }
+        resp = client.post("/generate/creative-assets/from-recommendation", json={
+            "recommendationId": "550e8400-e29b-41d4-a716-446655440000",
+        })
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn("STOP", resp.json()["message"])
+
+    @patch("app._fetch_business")
+    @patch("app._persist_asset")
+    @patch("app._query_recommendation")
+    @patch("app._is_provider_configured", return_value=False)
+    def test_stop_recommendation_allowed_via_metadata(self, mock_provider, mock_rec, mock_persist, mock_biz):
+        rec_id = "550e8400-e29b-41d4-a716-446655440000"
+        mock_rec.return_value = {
+            "id": rec_id,
+            "business_id": "660e8400-e29b-41d4-a716-446655440000",
+            "creative_asset_id": None,
+            "recommendation_type": "STOP",
+            "priority": "HIGH",
+            "title": "Stop underperformer",
+            "description": "Pause this asset",
+            "reasoning_json": {},
+            "suggested_next_action": "Pause",
+            "status": "OPEN",
+            "metadata_json": {"allow_generate": True},
+        }
+        mock_biz.return_value = {"business_name": "TestBiz", "industry": "tech", "product": "app"}
+        resp = client.post("/generate/creative-assets/from-recommendation", json={
+            "recommendationId": rec_id,
+        })
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.json()["status"], "STUBBED")
+
+    @patch("app._fetch_business")
+    @patch("app._persist_asset")
+    @patch("app._query_winner_asset")
+    @patch("app._query_recommendation")
+    @patch("app._is_provider_configured", return_value=False)
+    def test_adapt_for_platform_overrides_platform(self, mock_provider, mock_rec, mock_winner, mock_persist, mock_biz):
+        rec_id = "550e8400-e29b-41d4-a716-446655440000"
+        asset_id = "770e8400-e29b-41d4-a716-446655440000"
+        mock_rec.return_value = {
+            "id": rec_id,
+            "business_id": "660e8400-e29b-41d4-a716-446655440000",
+            "creative_asset_id": asset_id,
+            "recommendation_type": "ADAPT_FOR_PLATFORM",
+            "priority": "MEDIUM",
+            "title": "Adapt for tiktok",
+            "description": "Replicate winning approach for tiktok",
+            "reasoning_json": {},
+            "suggested_next_action": "Create platform-adapted version",
+            "status": "OPEN",
+            "metadata_json": None,
+        }
+        mock_winner.return_value = {
+            "id": asset_id,
+            "business_id": "660e8400-e29b-41d4-a716-446655440000",
+            "asset_type": "image",
+            "platform": "meta",
+            "prompt_text": "original prompt",
+            "metadata_json": {},
+            "trend_context_json": None,
+            "total_impressions": 5000,
+            "total_clicks": 200,
+            "total_conversions": 10,
+            "avg_roas": 3.0,
+        }
+        mock_biz.return_value = {"business_name": "TestBiz", "industry": "fashion", "product": "dresses"}
+        resp = client.post("/generate/creative-assets/from-recommendation", json={
+            "recommendationId": rec_id,
+            "variationMode": "platform-adapted",
+        })
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertEqual(data["status"], "STUBBED")
+
+
+class TestRecommendationPromptBuilder(unittest.TestCase):
+    def test_scale_prompt_includes_winning_formula(self):
+        from app import _build_recommendation_prompt
+        rec = {"recommendation_type": "SCALE", "title": "Scale top performer", "description": "ROAS is 3.5"}
+        winner = {"prompt_text": "original prompt", "metadata_json": {"hook": "Stop scrolling", "visualStyle": "UGC", "emotionalAngle": "curiosity"}, "avg_roas": 3.5, "total_conversions": 10}
+        result = _build_recommendation_prompt(rec, winner, {"product": "rings", "industry": "jewelry"}, "similar")
+        self.assertIn("winning formula", result.lower())
+        self.assertIn("Stop scrolling", result)
+        self.assertIn("UGC", result)
+        self.assertIn("subtle variations", result.lower())
+
+    def test_test_more_prompt_includes_controlled(self):
+        from app import _build_recommendation_prompt
+        rec = {"recommendation_type": "TEST_MORE", "title": "Test more variants", "description": "Needs more data"}
+        result = _build_recommendation_prompt(rec, None, None, "fresh-angle")
+        self.assertIn("controlled", result.lower())
+        self.assertIn("entirely different", result.lower())
+
+    def test_adapt_platform_prompt(self):
+        from app import _build_recommendation_prompt
+        rec = {"recommendation_type": "ADAPT_FOR_PLATFORM", "title": "Adapt for TikTok", "description": "TikTok adaptation"}
+        result = _build_recommendation_prompt(rec, None, None, "platform-adapted")
+        self.assertIn("platform", result.lower())
+
+    def test_duplicate_winner_prompt(self):
+        from app import _build_recommendation_prompt
+        rec = {"recommendation_type": "DUPLICATE_WINNER", "title": "Duplicate winner", "description": "Replicate success"}
+        result = _build_recommendation_prompt(rec, None, {"product": "app", "industry": "tech"}, "similar")
+        self.assertIn("similar", result.lower())
+        self.assertIn("tech", result.lower())
+
+    def test_prompt_includes_performance_data(self):
+        from app import _build_recommendation_prompt
+        rec = {"recommendation_type": "SCALE", "title": "Scale it", "description": "Great performance"}
+        winner = {"prompt_text": "base", "metadata_json": {}, "avg_roas": 4.2, "total_conversions": 25}
+        result = _build_recommendation_prompt(rec, winner, None, "similar")
+        self.assertIn("4.20", result)
+        self.assertIn("25", result)
+
+
 if __name__ == "__main__":
     unittest.main()
