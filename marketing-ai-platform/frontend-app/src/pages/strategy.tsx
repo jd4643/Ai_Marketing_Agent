@@ -11,6 +11,12 @@ import { PageSkeleton } from '../components/ui/loading-skeleton';
 import { StatusBadge } from '../components/ui/status-badge';
 import type { StrategyResponse } from '../types';
 
+function render(value: unknown): string {
+  if (value == null) return '';
+  if (typeof value === 'string') return value;
+  return JSON.stringify(value, null, 2);
+}
+
 const schema = z.object({
   objective: z.string().min(1, 'Objective is required'),
   monthlyBudget: z.string().min(1, 'Budget is required'),
@@ -118,21 +124,21 @@ export default function StrategyPage() {
             <StatusBadge label={strategy.strategyVersion ?? 'v1'} />
           </div>
 
-          {strategy.businessSnapshot && (
+          {render(strategy.businessSnapshot) && (
             <SectionCard title="Business Snapshot">
-              <p className="text-sm text-gray-700 whitespace-pre-wrap">{strategy.businessSnapshot}</p>
+              <pre className="text-sm text-gray-700 whitespace-pre-wrap break-words">{render(strategy.businessSnapshot)}</pre>
             </SectionCard>
           )}
 
-          {strategy.marketAnalysis && (
+          {render(strategy.marketAnalysis) && (
             <SectionCard title="Market Analysis">
-              <p className="text-sm text-gray-700 whitespace-pre-wrap">{strategy.marketAnalysis}</p>
+              <pre className="text-sm text-gray-700 whitespace-pre-wrap break-words">{render(strategy.marketAnalysis)}</pre>
             </SectionCard>
           )}
 
-          {strategy.whyThisStrategy && (
+          {render(strategy.whyThisStrategy) && (
             <SectionCard title="Why This Strategy">
-              <p className="text-sm text-gray-700 whitespace-pre-wrap">{strategy.whyThisStrategy}</p>
+              <pre className="text-sm text-gray-700 whitespace-pre-wrap break-words">{render(strategy.whyThisStrategy)}</pre>
             </SectionCard>
           )}
 
@@ -160,27 +166,27 @@ export default function StrategyPage() {
             </SectionCard>
           )}
 
-          {strategy.creativeStrategy && (
+          {render(strategy.creativeStrategy) && (
             <SectionCard title="Creative Strategy">
-              <p className="text-sm text-gray-700 whitespace-pre-wrap">{strategy.creativeStrategy}</p>
+              <pre className="text-sm text-gray-700 whitespace-pre-wrap break-words">{render(strategy.creativeStrategy)}</pre>
             </SectionCard>
           )}
 
-          {strategy.executionRoadmap && (
+          {render(strategy.executionRoadmap) && (
             <SectionCard title="Execution Roadmap">
-              <p className="text-sm text-gray-700 whitespace-pre-wrap">{strategy.executionRoadmap}</p>
+              <pre className="text-sm text-gray-700 whitespace-pre-wrap break-words">{render(strategy.executionRoadmap)}</pre>
             </SectionCard>
           )}
 
-          {strategy.measurementPlan && (
+          {render(strategy.measurementPlan) && (
             <SectionCard title="Measurement Plan">
-              <p className="text-sm text-gray-700 whitespace-pre-wrap">{strategy.measurementPlan}</p>
+              <pre className="text-sm text-gray-700 whitespace-pre-wrap break-words">{render(strategy.measurementPlan)}</pre>
             </SectionCard>
           )}
 
-          {strategy.first14DaysLearningPlan && (
+          {render(strategy.first14DaysLearningPlan) && (
             <SectionCard title="First 14 Days Plan">
-              <p className="text-sm text-gray-700 whitespace-pre-wrap">{strategy.first14DaysLearningPlan}</p>
+              <pre className="text-sm text-gray-700 whitespace-pre-wrap break-words">{render(strategy.first14DaysLearningPlan)}</pre>
             </SectionCard>
           )}
 
