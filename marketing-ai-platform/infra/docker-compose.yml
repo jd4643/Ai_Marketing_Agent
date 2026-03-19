@@ -46,5 +46,9 @@ services:
     env_file: [.env]
     ports: ["8080:8080"]
     depends_on: [strategy-service, creative-service, analytics-service, trend-service, generation-service]
+  frontend-app:
+    build: ../frontend-app
+    ports: ["3000:3000"]
+    depends_on: [api-gateway]
 volumes:
   pg_data:
