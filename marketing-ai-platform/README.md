@@ -21,6 +21,49 @@ Production-oriented monorepo implementing a multi-service marketing AI platform 
 - `analytics-service` (8083): metrics ingest + summary; owns Flyway migration; Meta Ads API integration (read-only sync, asset mapping, derived performance).
 - `trend-service` (8091): pytrends ingestion, scheduled refresh, trends read API.
 - `generation-service` (8092): creative asset generation with DB persistence, prompt builder, DALL-E integration (stubbed by default).
+- **`frontend-app` (3000)**: React + TypeScript SPA — dashboard, strategy generator, creative generator, asset library, recommendations, platform insights.
+
+## Frontend (frontend-app)
+
+### Tech stack
+React 18 · Vite 6 · TypeScript 5 · Tailwind CSS v4 · React Router 7 · TanStack Query 5 · React Hook Form 7 · Zod · Recharts · Axios · Lucide React
+
+### Quick start
+```bash
+cd frontend-app
+cp .env.example .env       # defaults to http://localhost:8080 (gateway)
+npm install
+npm run dev                 # http://localhost:3000
+```
+
+### Pages
+| Route              | Purpose                                                    |
+|--------------------|------------------------------------------------------------|
+| `/onboarding`      | Business profile creation (React Hook Form + Zod)          |
+| `/dashboard`       | KPI overview, creative health pie chart, signals, sync     |
+| `/strategy`        | Strategy generation form + full consultant-style output    |
+| `/creatives`       | Creative concept generation + asset generation triggers    |
+| `/assets`          | Asset library with platform/classification filters         |
+| `/recommendations` | AI recommendations grouped by priority, with actions       |
+| `/insights`        | Platform insights — spend, impressions, campaigns, ads     |
+
+### Architecture
+```
+src/
+├── api/          # Typed API modules (one per backend service)
+├── app/          # App root + router
+├── components/   # Reusable UI components (KPI card, badges, etc.)
+├── hooks/        # Business context + toast system
+├── layouts/      # Sidebar app shell
+├── lib/          # Axios client with request-id + error interceptor
+├── pages/        # One file per route
+└── types/        # TypeScript interfaces matching backend DTOs
+```
+
+### Build
+```bash
+npm run build     # TypeScript check + Vite production build → dist/
+```
 
 ## Environment
 Copy `infra/.env.example` -> `infra/.env` and update secrets.
