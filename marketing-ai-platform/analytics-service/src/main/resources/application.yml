@@ -52,3 +52,6 @@ meta:
 platform:
   token:
     encryption-key: ${PLATFORM_TOKEN_ENCRYPTION_KEY:}
+execution:
+  max-active-plans: ${EXECUTION_MAX_ACTIVE_PLANS:5}
+  default-max-retries: ${EXECUTION_DEFAULT_MAX_RETRIES:3}

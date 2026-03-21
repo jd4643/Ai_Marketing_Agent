@@ -63,4 +63,10 @@ public class DashboardController {
         log.info("GET /analytics/dashboard/platforms businessId={} days={}", businessId, days);
         return dashboardService.getPlatforms(businessId, days);
     }
+
+    @GetMapping("/execution")
+    public ExecutionOverview executionOverview(@RequestParam UUID businessId) {
+        log.info("GET /analytics/dashboard/execution businessId={}", businessId);
+        return dashboardService.getExecutionOverview(businessId);
+    }
 }

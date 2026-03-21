@@ -49,5 +49,8 @@ List<Object[]> aggregateAllAssets(@Param("businessId") UUID businessId,@Param("s
 
 List<CreativeAssetPerformance> findByBusinessIdAndRecordedAtAfter(UUID businessId, Instant since);
 
+@Query(value="SELECT classification, COUNT(*) FROM creative_asset_performance WHERE business_id=:businessId AND classification IS NOT NULL GROUP BY classification", nativeQuery=true)
+List<Object[]> countByClassification(@Param("businessId") UUID businessId);
+
 }
 

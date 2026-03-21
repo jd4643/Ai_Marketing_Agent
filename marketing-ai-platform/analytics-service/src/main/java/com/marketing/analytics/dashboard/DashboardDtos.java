@@ -167,4 +167,27 @@ public final class DashboardDtos {
             int days,
             List<PlatformCard> platforms
     ) {}
+
+    // ─── Execution ──────────────────────────────────────────────────────
+
+    public record ExecutionPlanSummary(
+            UUID planId,
+            String name,
+            String status,
+            int totalTasks,
+            int completedTasks,
+            int failedTasks,
+            int skippedTasks,
+            int progressPercent,
+            Instant startedAt,
+            Instant createdAt
+    ) {}
+
+    public record ExecutionOverview(
+            int activePlans,
+            int totalPlans,
+            List<ExecutionPlanSummary> recentPlans
+    ) {
+        public static final ExecutionOverview EMPTY = new ExecutionOverview(0, 0, List.of());
+    }
 }

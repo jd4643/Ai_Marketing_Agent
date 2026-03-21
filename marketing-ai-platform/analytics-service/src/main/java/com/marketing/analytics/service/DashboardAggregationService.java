@@ -6,6 +6,7 @@ import com.marketing.analytics.dashboard.DashboardDtos.*;
 import com.marketing.analytics.model.AdPlatformConnection;
 import com.marketing.analytics.model.BusinessProfile;
 import com.marketing.analytics.model.CreativeOptimizationRecommendation;
+import com.marketing.analytics.model.ExecutionPlan;
 import com.marketing.analytics.repo.*;
 import com.marketing.analytics.service.CreativeWinnerScoringService.ScoringResult;
 
@@ -34,6 +35,7 @@ public class DashboardAggregationService {
     private final AdPlatformConnectionRepository connectionRepo;
     private final AdPlatformInsightRepository insightRepo;
     private final CreativeAssetPlatformMappingRepository mappingRepo;
+    private final ExecutionPlanRepository planRepo;
     private final ObjectMapper om = new ObjectMapper();
 
     public DashboardAggregationService(
@@ -44,7 +46,8 @@ public class DashboardAggregationService {
             CreativeOptimizationRecommendationService recService,
             AdPlatformConnectionRepository connectionRepo,
             AdPlatformInsightRepository insightRepo,
-            CreativeAssetPlatformMappingRepository mappingRepo) {
+            CreativeAssetPlatformMappingRepository mappingRepo,
+            ExecutionPlanRepository planRepo) {
         this.profileRepo = profileRepo;
         this.campaignRepo = campaignRepo;
         this.scoringService = scoringService;
@@ -53,6 +56,7 @@ public class DashboardAggregationService {
         this.connectionRepo = connectionRepo;
         this.insightRepo = insightRepo;
         this.mappingRepo = mappingRepo;
+        this.planRepo = planRepo;
     }
 
     // ─── Overview ───────────────────────────────────────────────────────
@@ -298,6 +302,37 @@ public class DashboardAggregationService {
 
         return new TopSignals(bestPlatform, bestAssetType, topHook);
     }
+
+    // ─── Execution Overview ────────────────────────────────────────────
+
+    public ExecutionOverview getExecutionOverview(UUID businessId) {
+        log.info("Dashboard execution overview businessId={} requestId={}", businessId, MDC.get("requestId"));
+
+        List<ExecutionPlan> allPlans = planRepo.findByBusinessIdOrderByCreatedAtDesc(businessId);
+        if (allPlans.isEmpty()) {
+            return ExecutionOverview.EMPTY;
+        }
+
+        long active = allPlans.stream()
+                .filter(p -> "ACTIVE".equals(p.getStatus()) || "IN_PROGRESS".equals(p.getStatus()))
+                .count();
+
+        List<ExecutionPlanSummary> recent = allPlans.stream()
+                .limit(5)
+                .map(p -> new ExecutionPlanSummary(
+                        p.getId(), p.getName(), p.getStatus(),
+                        p.getTotalTasks(), p.getCompletedTasks(),
+                        p.getFailedTasks(), p.getSkippedTasks(),
+                        p.getTotalTasks() > 0
+                                ? Math.round((float) (p.getCompletedTasks() + p.getSkippedTasks()) / p.getTotalTasks() * 100)
+                                : 0,
+                        p.getStartedAt(), p.getCreatedAt()))
+                .toList();
+
+        return new ExecutionOverview((int) active, allPlans.size(), recent);
+    }
+
+    // ─── Private Helpers ────────────────────────────────────────────────
 
     private RecommendationCard toRecommendationCard(CreativeOptimizationRecommendation rec) {
         return new RecommendationCard(

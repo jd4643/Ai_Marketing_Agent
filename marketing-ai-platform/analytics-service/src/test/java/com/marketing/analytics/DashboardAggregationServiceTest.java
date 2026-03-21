@@ -34,6 +34,7 @@ class DashboardAggregationServiceTest {
     @Mock AdPlatformConnectionRepository connectionRepo;
     @Mock AdPlatformInsightRepository insightRepo;
     @Mock CreativeAssetPlatformMappingRepository mappingRepo;
+    @Mock ExecutionPlanRepository planRepo;
     @InjectMocks DashboardAggregationService service;
 
     static final UUID BIZ = UUID.randomUUID();
