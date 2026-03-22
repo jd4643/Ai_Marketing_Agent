@@ -7,6 +7,7 @@ import {
   ImageIcon,
   Lightbulb,
   BarChart3,
+  Rocket,
   Menu,
   LogOut,
 } from 'lucide-react';
@@ -19,6 +20,7 @@ const nav = [
   { to: '/assets', label: 'Assets', icon: ImageIcon },
   { to: '/recommendations', label: 'Recommendations', icon: Lightbulb },
   { to: '/insights', label: 'Insights', icon: BarChart3 },
+  { to: '/launch-studio', label: 'Launch Studio', icon: Rocket },
 ];
 
 export default function AppLayout() {

@@ -11,6 +11,7 @@ import CreativesPage from '../pages/creatives';
 import AssetsPage from '../pages/assets';
 import RecommendationsPage from '../pages/recommendations';
 import InsightsPage from '../pages/insights';
+import LaunchStudioPage from '../pages/launch-studio';
 
 function RequiresBusiness({ children }: { children: ReactNode }) {
   const { businessId } = useBusiness();
@@ -34,6 +35,7 @@ export const router = createBrowserRouter([
       { path: 'assets', element: <AssetsPage /> },
       { path: 'recommendations', element: <RecommendationsPage /> },
       { path: 'insights', element: <InsightsPage /> },
+      { path: 'launch-studio', element: <LaunchStudioPage /> },
     ],
   },
 ]);
