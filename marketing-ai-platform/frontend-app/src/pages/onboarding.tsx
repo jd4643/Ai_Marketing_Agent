@@ -3,6 +3,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useMutation } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
+import { Sparkles } from 'lucide-react';
 import { createBusiness } from '../api/business';
 import { useBusiness } from '../hooks/use-business';
 import { useToast } from '../hooks/use-toast';
@@ -66,7 +67,7 @@ export default function OnboardingPage() {
         type={opts?.type ?? 'text'}
         placeholder={opts?.placeholder}
         {...register(name)}
-        className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-brand-500 focus:ring-brand-500"
+        className="form-input mt-1"
       />
       {errors[name] && (
         <p className="mt-1 text-xs text-red-500">{errors[name]?.message}</p>
@@ -75,14 +76,14 @@ export default function OnboardingPage() {
   );
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-surface-alt p-4">
-      <div className="w-full max-w-lg rounded-2xl bg-surface p-8 shadow-lg">
+    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-brand-50 via-surface-alt to-surface p-4">
+      <div className="w-full max-w-lg animate-scale-in rounded-2xl bg-surface p-8 shadow-xl ring-1 ring-black/5">
         <div className="mb-8 text-center">
-          <div className="mx-auto mb-4 h-12 w-12 rounded-xl bg-brand-500 flex items-center justify-center text-white font-bold text-xl">
-            M
+          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-brand-400 to-brand-600 text-white shadow-lg shadow-brand-500/30">
+            <Sparkles size={28} />
           </div>
-          <h1 className="text-2xl font-bold text-gray-900">Set up your business</h1>
-          <p className="mt-2 text-sm text-gray-500">
+          <h1 className="text-2xl font-bold tracking-tight text-gray-900">Set up your business</h1>
+          <p className="mt-2 text-sm leading-relaxed text-gray-500">
             Tell us about your business so we can craft the perfect marketing strategy.
           </p>
         </div>
@@ -96,11 +97,7 @@ export default function OnboardingPage() {
           {field('targetAudience', 'Target Audience', { placeholder: 'Young professionals 25-35' })}
           {field('websiteUrl', 'Website URL', { placeholder: 'https://example.com', type: 'url' })}
 
-          <button
-            type="submit"
-            disabled={mutation.isPending}
-            className="w-full rounded-lg bg-brand-600 px-4 py-3 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50 transition-colors"
-          >
+          <button type="submit" disabled={mutation.isPending} className="btn-primary w-full py-3">
             {mutation.isPending ? 'Creating...' : 'Create Business & Get Started'}
           </button>
         </form>

@@ -31,13 +31,16 @@ export default function InsightsPage() {
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Platform Insights</h1>
-          <p className="text-sm text-gray-500">Last {days} days</p>
+          <div className="flex items-center gap-2">
+            <BarChart3 size={22} className="text-brand-500" />
+            <h1 className="text-2xl font-bold tracking-tight text-gray-900">Platform Insights</h1>
+          </div>
+          <p className="mt-1 text-sm text-gray-500">Last {days} days</p>
         </div>
         <select
           value={days}
           onChange={(e) => setDays(Number(e.target.value))}
-          className="rounded-lg border border-gray-300 px-3 py-2 text-sm"
+          className="form-input w-auto"
         >
           <option value={7}>Last 7 days</option>
           <option value={14}>Last 14 days</option>
@@ -48,7 +51,7 @@ export default function InsightsPage() {
 
       {platforms.length === 0 ? (
         <EmptyState
-          icon={<BarChart3 size={48} />}
+          icon={<BarChart3 size={32} />}
           title="No platform data"
           description="Connect a platform in settings to start seeing insights."
         />
@@ -79,25 +82,25 @@ function PlatformSection({ platform: p, fmt }: { platform: PlatformCard; fmt: (n
 
       {p.topCampaigns && p.topCampaigns.length > 0 && (
         <SectionCard title="Top Campaigns" defaultOpen={false}>
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto -mx-5">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b text-left text-gray-500">
-                  <th className="pb-2 pr-4">Campaign</th>
-                  <th className="pb-2 pr-4 text-right">Spend</th>
-                  <th className="pb-2 pr-4 text-right">Impressions</th>
-                  <th className="pb-2 pr-4 text-right">Clicks</th>
-                  <th className="pb-2 text-right">Conversions</th>
+                <tr className="border-b text-left text-xs uppercase tracking-wider text-gray-400">
+                  <th className="px-5 pb-3 font-medium">Campaign</th>
+                  <th className="px-5 pb-3 font-medium text-right">Spend</th>
+                  <th className="px-5 pb-3 font-medium text-right">Impressions</th>
+                  <th className="px-5 pb-3 font-medium text-right">Clicks</th>
+                  <th className="px-5 pb-3 font-medium text-right">Conversions</th>
                 </tr>
               </thead>
               <tbody>
                 {p.topCampaigns.map((c) => (
-                  <tr key={c.externalCampaignId} className="border-b last:border-0">
-                    <td className="py-2 pr-4 font-medium">{c.campaignName}</td>
-                    <td className="py-2 pr-4 text-right">{fmt(c.spend)}</td>
-                    <td className="py-2 pr-4 text-right">{c.impressions.toLocaleString()}</td>
-                    <td className="py-2 pr-4 text-right">{c.clicks.toLocaleString()}</td>
-                    <td className="py-2 text-right">{c.conversions.toLocaleString()}</td>
+                  <tr key={c.externalCampaignId} className="border-b last:border-0 transition-colors hover:bg-gray-50/60">
+                    <td className="px-5 py-3 font-medium">{c.campaignName}</td>
+                    <td className="px-5 py-3 text-right tabular-nums">{fmt(c.spend)}</td>
+                    <td className="px-5 py-3 text-right tabular-nums">{c.impressions.toLocaleString()}</td>
+                    <td className="px-5 py-3 text-right tabular-nums">{c.clicks.toLocaleString()}</td>
+                    <td className="px-5 py-3 text-right tabular-nums">{c.conversions.toLocaleString()}</td>
                   </tr>
                 ))}
               </tbody>
@@ -108,27 +111,27 @@ function PlatformSection({ platform: p, fmt }: { platform: PlatformCard; fmt: (n
 
       {p.topAds && p.topAds.length > 0 && (
         <SectionCard title="Top Ads" defaultOpen={false}>
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto -mx-5">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b text-left text-gray-500">
-                  <th className="pb-2 pr-4">Ad</th>
-                  <th className="pb-2 pr-4 text-right">Spend</th>
-                  <th className="pb-2 pr-4 text-right">Impressions</th>
-                  <th className="pb-2 pr-4 text-right">Clicks</th>
-                  <th className="pb-2 pr-4 text-right">Conversions</th>
-                  <th className="pb-2 text-right">ROAS</th>
+                <tr className="border-b text-left text-xs uppercase tracking-wider text-gray-400">
+                  <th className="px-5 pb-3 font-medium">Ad</th>
+                  <th className="px-5 pb-3 font-medium text-right">Spend</th>
+                  <th className="px-5 pb-3 font-medium text-right">Impressions</th>
+                  <th className="px-5 pb-3 font-medium text-right">Clicks</th>
+                  <th className="px-5 pb-3 font-medium text-right">Conversions</th>
+                  <th className="px-5 pb-3 font-medium text-right">ROAS</th>
                 </tr>
               </thead>
               <tbody>
                 {p.topAds.map((a) => (
-                  <tr key={a.externalAdId} className="border-b last:border-0">
-                    <td className="py-2 pr-4 font-medium">{a.adName}</td>
-                    <td className="py-2 pr-4 text-right">{fmt(a.spend)}</td>
-                    <td className="py-2 pr-4 text-right">{a.impressions.toLocaleString()}</td>
-                    <td className="py-2 pr-4 text-right">{a.clicks.toLocaleString()}</td>
-                    <td className="py-2 pr-4 text-right">{a.conversions.toLocaleString()}</td>
-                    <td className="py-2 text-right">{a.avgRoas.toFixed(2)}x</td>
+                  <tr key={a.externalAdId} className="border-b last:border-0 transition-colors hover:bg-gray-50/60">
+                    <td className="px-5 py-3 font-medium">{a.adName}</td>
+                    <td className="px-5 py-3 text-right tabular-nums">{fmt(a.spend)}</td>
+                    <td className="px-5 py-3 text-right tabular-nums">{a.impressions.toLocaleString()}</td>
+                    <td className="px-5 py-3 text-right tabular-nums">{a.clicks.toLocaleString()}</td>
+                    <td className="px-5 py-3 text-right tabular-nums">{a.conversions.toLocaleString()}</td>
+                    <td className="px-5 py-3 text-right tabular-nums">{a.avgRoas.toFixed(2)}x</td>
                   </tr>
                 ))}
               </tbody>

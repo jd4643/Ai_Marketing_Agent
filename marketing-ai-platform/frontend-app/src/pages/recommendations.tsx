@@ -61,13 +61,16 @@ export default function RecommendationsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Recommendations</h1>
-        <p className="text-sm text-gray-500">{totalRecs} recommendations</p>
+        <div className="flex items-center gap-2">
+          <Lightbulb size={22} className="text-brand-500" />
+          <h1 className="text-2xl font-bold tracking-tight text-gray-900">Recommendations</h1>
+        </div>
+        <p className="mt-1 text-sm text-gray-500">{totalRecs} recommendations</p>
       </div>
 
       {totalRecs === 0 ? (
         <EmptyState
-          icon={<Lightbulb size={48} />}
+          icon={<Lightbulb size={32} />}
           title="No recommendations"
           description="As your campaigns run, the AI will generate optimization recommendations."
         />
@@ -83,28 +86,28 @@ export default function RecommendationsPage() {
 
               <div className="space-y-3">
                 {group.items.map((rec) => (
-                  <div key={rec.recommendationId} className="rounded-xl border border-border bg-surface p-5 shadow-sm">
+                  <div key={rec.recommendationId} className="rounded-xl border border-border bg-surface p-5 shadow-sm transition-all duration-200 hover:shadow-md">
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                      <div className="flex-1 space-y-1">
-                        <div className="flex items-center gap-2">
+                      <div className="flex-1 space-y-1.5">
+                        <div className="flex flex-wrap items-center gap-2">
                           <h3 className="font-semibold text-gray-900">{rec.title}</h3>
                           <StatusBadge label={rec.type} />
                           <StatusBadge label={rec.status} />
                         </div>
-                        <p className="text-sm text-gray-600">{rec.description}</p>
+                        <p className="text-sm leading-relaxed text-gray-600">{rec.description}</p>
                         {rec.suggestedNextAction && (
-                          <p className="text-xs text-brand-600 font-medium">
+                          <p className="text-xs font-semibold text-brand-600">
                             Next: {rec.suggestedNextAction}
                           </p>
                         )}
                       </div>
 
-                      <div className="flex flex-wrap gap-2">
+                      <div className="flex flex-wrap gap-2 shrink-0">
                         {rec.availableActions?.includes('APPLY') && rec.status === 'OPEN' && (
                           <button
                             onClick={() => applyMut.mutate(rec.recommendationId)}
                             disabled={applyMut.isPending}
-                            className="flex items-center gap-1 rounded-lg bg-green-50 px-3 py-1.5 text-xs font-medium text-green-700 hover:bg-green-100"
+                            className="flex items-center gap-1 rounded-lg bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-700 ring-1 ring-inset ring-emerald-600/20 transition-colors hover:bg-emerald-100"
                           >
                             <Check size={14} /> Apply
                           </button>
@@ -113,7 +116,7 @@ export default function RecommendationsPage() {
                           <button
                             onClick={() => dismissMut.mutate(rec.recommendationId)}
                             disabled={dismissMut.isPending}
-                            className="flex items-center gap-1 rounded-lg bg-gray-50 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-100"
+                            className="flex items-center gap-1 rounded-lg bg-gray-50 px-3 py-1.5 text-xs font-medium text-gray-600 ring-1 ring-inset ring-gray-500/20 transition-colors hover:bg-gray-100"
                           >
                             <X size={14} /> Dismiss
                           </button>
@@ -122,7 +125,7 @@ export default function RecommendationsPage() {
                           <button
                             onClick={() => genMut.mutate(rec.recommendationId)}
                             disabled={genMut.isPending}
-                            className="flex items-center gap-1 rounded-lg bg-brand-50 px-3 py-1.5 text-xs font-medium text-brand-700 hover:bg-brand-100"
+                            className="flex items-center gap-1 rounded-lg bg-brand-50 px-3 py-1.5 text-xs font-medium text-brand-700 ring-1 ring-inset ring-brand-600/20 transition-colors hover:bg-brand-100"
                           >
                             <Sparkles size={14} /> Generate Variants
                           </button>
@@ -131,7 +134,7 @@ export default function RecommendationsPage() {
                           <button
                             onClick={() => exportMut.mutate(rec.recommendationId)}
                             disabled={exportMut.isPending}
-                            className="flex items-center gap-1 rounded-lg bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-100"
+                            className="flex items-center gap-1 rounded-lg bg-sky-50 px-3 py-1.5 text-xs font-medium text-sky-700 ring-1 ring-inset ring-sky-600/20 transition-colors hover:bg-sky-100"
                           >
                             <Download size={14} /> Export
                           </button>

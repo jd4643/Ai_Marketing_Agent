@@ -614,9 +614,9 @@ function FormField({ label, required, children }: { label: string; required?: bo
 
 function InfoBlock({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-lg bg-gray-50 p-3">
-      <span className="text-xs font-medium text-gray-500">{label}</span>
-      <p className="text-sm text-gray-800 mt-0.5">{value}</p>
+    <div className="rounded-lg bg-gray-50/80 p-3">
+      <span className="text-xs font-medium uppercase tracking-wider text-gray-400">{label}</span>
+      <p className="text-sm text-gray-800 mt-0.5 leading-relaxed">{value}</p>
     </div>
   );
 }
@@ -635,8 +635,11 @@ export default function LaunchStudioPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Launch Studio</h1>
-        <p className="text-sm text-gray-500">
+        <div className="flex items-center gap-2">
+          <Rocket size={22} className="text-brand-500" />
+          <h1 className="text-2xl font-bold tracking-tight text-gray-900">Launch Studio</h1>
+        </div>
+        <p className="mt-1 text-sm text-gray-500">
           Generate landing pages, promotional offers, and full launch packages powered by AI.
         </p>
       </div>
@@ -650,10 +653,10 @@ export default function LaunchStudioPage() {
             <button
               key={tab.key}
               onClick={() => setActiveTab(tab.key)}
-              className={`flex flex-1 items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium transition-colors ${
+              className={`flex flex-1 items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium transition-all duration-200 ${
                 isActive
-                  ? 'bg-brand-600 text-white shadow-sm'
-                  : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+                  ? 'bg-brand-600 text-white shadow-md shadow-brand-600/20'
+                  : 'text-gray-500 hover:bg-gray-50 hover:text-gray-900'
               }`}
             >
               <Icon size={16} />

@@ -12,7 +12,83 @@
   --color-brand-800: #3730a3;
   --color-brand-900: #312e81;
   --color-surface: #ffffff;
-  --color-surface-alt: #f9fafb;
-  --color-surface-dark: #111827;
-  --color-border: #e5e7eb;
+  --color-surface-alt: #f8fafc;
+  --color-surface-dark: #0f172a;
+  --color-border: #e2e8f0;
 }
+
+/* ── Base ── */
+html {
+  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ── Custom scrollbar ── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+/* ── Focus ring ── */
+*:focus-visible {
+  outline: 2px solid var(--color-brand-500);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* ── Shared form utility ── */
+.form-input {
+  display: block;
+  width: 100%;
+  border-radius: 0.5rem;
+  border: 1px solid var(--color-border);
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  background: var(--color-surface);
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.form-input:focus {
+  border-color: var(--color-brand-500);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-brand-500) 15%, transparent);
+  outline: none;
+}
+.form-input::placeholder { color: #94a3b8; }
+
+/* ── Primary button ── */
+.btn-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border-radius: 0.5rem;
+  background: var(--color-brand-600);
+  padding: 0.625rem 1.25rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #fff;
+  transition: background 0.15s, transform 0.1s, box-shadow 0.15s;
+  cursor: pointer;
+}
+.btn-primary:hover { background: var(--color-brand-700); box-shadow: 0 1px 3px rgba(0,0,0,.12); }
+.btn-primary:active { transform: scale(0.98); }
+.btn-primary:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+/* ── Keyframes ── */
+@keyframes slideIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes scaleIn {
+  from { opacity: 0; transform: scale(0.95); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+.animate-slide-in { animation: slideIn 0.2s ease-out; }
+.animate-fade-in  { animation: fadeIn 0.15s ease-out; }
+.animate-scale-in { animation: scaleIn 0.2s ease-out; }
