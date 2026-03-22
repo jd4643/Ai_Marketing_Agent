@@ -14,6 +14,9 @@ import com.marketing.analytics.service.AdPlatformIntegrationService;
 import com.marketing.analytics.service.CreativeOptimizationRecommendationService;
 import com.marketing.analytics.service.CreativeWinnerScoringService;
 import com.marketing.analytics.service.RecommendationActionService;
+import com.marketing.analytics.service.OutcomeTrackingService;
+import com.marketing.analytics.service.LearningEventService;
+import com.marketing.analytics.service.StrategyEffectivenessService;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -36,6 +39,9 @@ class AnalyticsControllerTest {
   @MockBean com.marketing.analytics.service.DashboardAggregationService dashboardAggregationService;
   @MockBean com.marketing.analytics.service.ExecutionService executionService;
   @MockBean com.marketing.analytics.service.SnapshotService snapshotService;
+  @MockBean OutcomeTrackingService outcomeTrackingService;
+  @MockBean LearningEventService learningEventService;
+  @MockBean StrategyEffectivenessService strategyEffectivenessService;
 
   @Test void ingestValidation() throws Exception {
     mvc.perform(post("/analytics/metrics/ingest").contentType(MediaType.APPLICATION_JSON).content("{}"))

@@ -25,12 +25,15 @@ public class RecommendationActionService {
     private static final Logger log = LoggerFactory.getLogger(RecommendationActionService.class);
     private final CreativeOptimizationRecommendationRepository recRepo;
     private final CreativeOptimizationRecommendationService recService;
+    private final OutcomeTrackingService outcomeTrackingService;
     private final ObjectMapper om = new ObjectMapper();
 
     public RecommendationActionService(CreativeOptimizationRecommendationRepository recRepo,
-                                       CreativeOptimizationRecommendationService recService) {
+                                       CreativeOptimizationRecommendationService recService,
+                                       OutcomeTrackingService outcomeTrackingService) {
         this.recRepo = recRepo;
         this.recService = recService;
+        this.outcomeTrackingService = outcomeTrackingService;
     }
 
     /**
@@ -55,6 +58,14 @@ public class RecommendationActionService {
         rec.setUpdatedAt(Instant.now());
         recRepo.save(rec);
         log.info("Recommendation {} marked APPLIED requestId={}", recommendationId, requestId);
+
+        // Record baseline for closed-loop outcome tracking
+        try {
+            outcomeTrackingService.recordBaseline(recommendationId, "APPLIED");
+        } catch (Exception e) {
+            log.warn("Failed to record outcome baseline for recommendation={}: {}", recommendationId, e.getMessage());
+        }
+
         return recService.entityToMap(rec);
     }
 
@@ -80,6 +91,14 @@ public class RecommendationActionService {
         rec.setUpdatedAt(Instant.now());
         recRepo.save(rec);
         log.info("Recommendation {} marked DISMISSED requestId={}", recommendationId, requestId);
+
+        // Record baseline for closed-loop outcome tracking
+        try {
+            outcomeTrackingService.recordBaseline(recommendationId, "DISMISSED");
+        } catch (Exception e) {
+            log.warn("Failed to record outcome baseline for recommendation={}: {}", recommendationId, e.getMessage());
+        }
+
         return recService.entityToMap(rec);
     }
 

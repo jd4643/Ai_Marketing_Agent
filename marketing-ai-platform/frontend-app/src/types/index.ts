@@ -474,3 +474,87 @@ export interface GenerationServiceLinks {
   generateOffer: GenerationServiceLink;
   generateEnhancedLaunchPackage: GenerationServiceLink;
 }
+
+/* ── Feedback Loop / Learning ── */
+export interface RecommendationOutcomeResponse {
+  id: string;
+  recommendationId: string;
+  businessId: string;
+  actionTaken: string;
+  actionDate: string;
+  evaluationWindowDays: number;
+  outcomeVerdict: 'PENDING' | 'POSITIVE' | 'NEGATIVE' | 'NEUTRAL';
+  impactScore: number | null;
+  evaluationDate: string | null;
+  notes: string | null;
+  baselineSnapshot: Record<string, unknown>;
+  outcomeSnapshot: Record<string, unknown> | null;
+  deltaJson: Record<string, unknown> | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface OutcomeStats {
+  businessId: string;
+  totalOutcomes: number;
+  pending: number;
+  positive: number;
+  negative: number;
+  neutral: number;
+  successRate: number;
+  avgImpactScore: number;
+}
+
+export interface EvaluateOutcomesResult {
+  requestId: string;
+  evaluated: number;
+  positive: number;
+  negative: number;
+  neutral: number;
+  pendingRemaining: number;
+}
+
+export interface StrategyFreshness {
+  businessId: string;
+  strategyRunId?: string;
+  freshnessScore: number;
+  recommendedAction: 'KEEP' | 'REFRESH' | 'REGENERATE' | 'EVALUATE';
+  evaluatedAt?: string;
+  stalenessSignals?: string[];
+  message?: string;
+}
+
+export interface StrategyEffectivenessResponse {
+  id: string;
+  strategyRunId: string;
+  businessId: string;
+  evaluationType: string;
+  freshnessScore: number;
+  recommendedAction: string;
+  stalenessSignals: string[];
+  metricsAtEvaluation: Record<string, unknown>;
+  createdAt: string;
+}
+
+export interface LearningEventResponse {
+  id: string;
+  businessId: string;
+  eventType: string;
+  sourceEntityType: string;
+  sourceEntityId: string;
+  eventData: Record<string, unknown>;
+  severity: 'INFO' | 'WARNING' | 'CRITICAL';
+  createdAt: string;
+}
+
+export interface LearningInsights {
+  businessId: string;
+  eventCounts: Record<string, number>;
+  totalEvents30d: number;
+  warnings30d: number;
+  criticals30d: number;
+  recommendationOutcomes: string[];
+  stalenessSignals: string[];
+  learningNotes: string[];
+  outcomesLast7d: number;
+}

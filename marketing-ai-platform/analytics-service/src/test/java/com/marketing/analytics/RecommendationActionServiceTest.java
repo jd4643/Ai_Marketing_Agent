@@ -7,6 +7,7 @@ import static org.mockito.Mockito.*;
 import com.marketing.analytics.model.CreativeOptimizationRecommendation;
 import com.marketing.analytics.repo.CreativeOptimizationRecommendationRepository;
 import com.marketing.analytics.service.CreativeOptimizationRecommendationService;
+import com.marketing.analytics.service.OutcomeTrackingService;
 import com.marketing.analytics.service.RecommendationActionService;
 
 import java.time.Instant;
@@ -24,6 +25,7 @@ class RecommendationActionServiceTest {
 
     @Mock CreativeOptimizationRecommendationRepository recRepo;
     @Mock CreativeOptimizationRecommendationService recService;
+    @Mock OutcomeTrackingService outcomeTrackingService;
     @InjectMocks RecommendationActionService service;
 
     private CreativeOptimizationRecommendation buildRec(String type, String priority, String status) {

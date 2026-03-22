@@ -17,6 +17,9 @@ import com.marketing.analytics.service.AdPlatformIntegrationService;
 import com.marketing.analytics.service.CreativeOptimizationRecommendationService;
 import com.marketing.analytics.service.CreativeWinnerScoringService;
 import com.marketing.analytics.service.RecommendationActionService;
+import com.marketing.analytics.service.OutcomeTrackingService;
+import com.marketing.analytics.service.LearningEventService;
+import com.marketing.analytics.service.StrategyEffectivenessService;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -42,6 +45,9 @@ class AdPlatformIntegrationControllerTest {
     @MockBean com.marketing.analytics.service.DashboardAggregationService dashboardAggregationService;
     @MockBean com.marketing.analytics.service.ExecutionService executionService;
     @MockBean com.marketing.analytics.service.SnapshotService snapshotService;
+    @MockBean OutcomeTrackingService outcomeTrackingService;
+    @MockBean LearningEventService learningEventService;
+    @MockBean StrategyEffectivenessService strategyEffectivenessService;
 
     // ─── Connect ────────────────────────────────────────────────────────
 

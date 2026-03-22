@@ -27,6 +27,13 @@ public class IntelPromptBuilder {
     public String build(Map<String, Object> business, String objective, Object budget,
                         StrategyTemplateEntity template, String perfSummary,
                         List<String> trends, int confidenceScore, boolean coldStart) {
+        return build(business, objective, budget, template, perfSummary, trends, confidenceScore, coldStart, null);
+    }
+
+    public String build(Map<String, Object> business, String objective, Object budget,
+                        StrategyTemplateEntity template, String perfSummary,
+                        List<String> trends, int confidenceScore, boolean coldStart,
+                        Map<String, Object> learningInsights) {
         StringBuilder sb = new StringBuilder(4096);
 
         // ─── ROLE ───────────────────────────────────────────────────────
@@ -120,6 +127,47 @@ public class IntelPromptBuilder {
             sb.append("- Recommend structured testing before scaling.\n");
             sb.append("- Set expectations clearly: 'Week 1-2 is about data, not sales.'\n");
             sb.append("- Do NOT predict specific ROAS or CPL numbers — use ranges with caveats.\n\n");
+        }
+
+        // ─── F) LEARNING LOOP CONTEXT (closed-loop feedback) ────────────
+        if (learningInsights != null && !learningInsights.isEmpty()) {
+            sb.append("=== F) LEARNING LOOP CONTEXT (historical outcome data) ===\n");
+            sb.append("The system has tracked outcomes of previous recommendations for this business.\n");
+            sb.append("Use this data to inform your strategy — amplify what worked, avoid what failed.\n\n");
+
+            Object totalEvents = learningInsights.get("totalEvents30d");
+            if (totalEvents != null) {
+                sb.append("totalLearningEvents30d: ").append(totalEvents).append("\n");
+            }
+
+            Object outcomes = learningInsights.get("recommendationOutcomes");
+            if (outcomes instanceof Map<?,?> outMap) {
+                sb.append("recommendationOutcomes: ").append(outMap).append("\n");
+            }
+
+            Object staleness = learningInsights.get("stalenessSignals");
+            if (staleness instanceof List<?> signals && !signals.isEmpty()) {
+                sb.append("stalenessSignals: ").append(signals).append("\n");
+                sb.append("WARNING: Previous strategy shows staleness. Address these signals in your new strategy.\n");
+            }
+
+            Object warnings = learningInsights.get("warnings");
+            if (warnings instanceof Number w && w.intValue() > 0) {
+                sb.append("warningEvents: ").append(w).append("\n");
+            }
+            Object criticals = learningInsights.get("criticals");
+            if (criticals instanceof Number c && c.intValue() > 0) {
+                sb.append("criticalEvents: ").append(c).append(" — URGENT: address critical performance issues.\n");
+            }
+
+            Object notes = learningInsights.get("learningNotes");
+            if (notes instanceof List<?> notesList && !notesList.isEmpty()) {
+                sb.append("learningNotes:\n");
+                for (Object note : notesList) {
+                    sb.append("- ").append(note).append("\n");
+                }
+            }
+            sb.append("\n");
         }
 
         // ─── OUTPUT SCHEMA ──────────────────────────────────────────────

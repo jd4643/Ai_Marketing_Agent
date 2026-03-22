@@ -39,6 +39,9 @@ class DashboardControllerTest {
     @MockBean DashboardAggregationService dashboardService;
     @MockBean ExecutionService executionService;
     @MockBean SnapshotService snapshotService;
+    @MockBean OutcomeTrackingService outcomeTrackingService;
+    @MockBean LearningEventService learningEventService;
+    @MockBean StrategyEffectivenessService strategyEffectivenessService;
 
     static final UUID BIZ = UUID.randomUUID();
 

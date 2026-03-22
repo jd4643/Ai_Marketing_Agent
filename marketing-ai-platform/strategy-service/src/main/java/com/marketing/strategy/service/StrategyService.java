@@ -106,7 +106,11 @@ public class StrategyService {
         String finalChosenTemplateKey = chosenTemplateKey;
         StrategyTemplateEntity template = templateRepository.findByTemplateKey(chosenTemplateKey)
                 .orElseThrow(() -> new IllegalStateException("strategy template missing: " + finalChosenTemplateKey));
-        String prompt = promptBuilder.build(business, req.objective(), req.monthlyBudget(), template, perfSummary, trends, confidence.confidenceScore(), coldStart);
+
+        // Fetch closed-loop learning insights (non-blocking — graceful on failure)
+        Map<String, Object> learningInsights = fetchLearningInsights(req.businessId());
+
+        String prompt = promptBuilder.build(business, req.objective(), req.monthlyBudget(), template, perfSummary, trends, confidence.confidenceScore(), coldStart, learningInsights);
 
         Map<String, Object> llmResp;
         long start = System.currentTimeMillis();
@@ -170,6 +174,30 @@ public class StrategyService {
                 llmResp.put("optimizationSignals", merged);
             } else {
                 llmResp.put("optimizationSignals", recSignals);
+            }
+        }
+        // Inject learning loop metadata into response
+        if (learningInsights != null && !learningInsights.isEmpty()) {
+            llmResp.put("learningContext", learningInsights);
+            List<String> learningSignals = new ArrayList<>();
+            Object outcomes = learningInsights.get("recommendationOutcomes");
+            if (outcomes instanceof Map<?,?> outMap) {
+                learningSignals.add("Closed-loop outcomes: " + outMap);
+            }
+            Object stale = learningInsights.get("stalenessSignals");
+            if (stale instanceof List<?> signals && !signals.isEmpty()) {
+                learningSignals.add("Strategy staleness detected: " + signals);
+            }
+            if (!learningSignals.isEmpty()) {
+                Object existing = llmResp.get("optimizationSignals");
+                if (existing instanceof List<?> existingList) {
+                    List<String> merged = new ArrayList<>();
+                    for (Object item : existingList) merged.add(item.toString());
+                    merged.addAll(learningSignals);
+                    llmResp.put("optimizationSignals", merged);
+                } else {
+                    llmResp.put("optimizationSignals", learningSignals);
+                }
             }
         }
         saveHistory(requestId, req, prompt, llmResp, "SUCCESS", null, null, System.currentTimeMillis() - start);
@@ -1099,5 +1127,100 @@ public class StrategyService {
             log.warn("Failed to query open recommendations: {}", e.getMessage());
         }
         return out;
+    }
+
+    /**
+     * Fetch closed-loop learning insights from the shared analytics DB tables.
+     * Returns an empty map on failure — strategy generation continues without learning context.
+     */
+    private Map<String, Object> fetchLearningInsights(UUID businessId) {
+        Map<String, Object> insights = new HashMap<>();
+        try (Connection c = ds.getConnection()) {
+            // Count learning events in last 30 days
+            try (PreparedStatement ps = c.prepareStatement(
+                    "SELECT event_type, COUNT(*) FROM learning_events " +
+                    "WHERE business_id=? AND created_at > NOW() - INTERVAL '30 days' GROUP BY event_type")) {
+                ps.setObject(1, businessId);
+                ResultSet rs = ps.executeQuery();
+                Map<String, Integer> eventCounts = new HashMap<>();
+                int total = 0;
+                while (rs.next()) {
+                    int cnt = rs.getInt(2);
+                    eventCounts.put(rs.getString(1), cnt);
+                    total += cnt;
+                }
+                insights.put("eventCounts", eventCounts);
+                insights.put("totalEvents30d", total);
+            }
+
+            // Count warnings and criticals
+            try (PreparedStatement ps = c.prepareStatement(
+                    "SELECT severity, COUNT(*) FROM learning_events " +
+                    "WHERE business_id=? AND created_at > NOW() - INTERVAL '30 days' " +
+                    "AND severity IN ('WARNING','CRITICAL') GROUP BY severity")) {
+                ps.setObject(1, businessId);
+                ResultSet rs = ps.executeQuery();
+                while (rs.next()) {
+                    String sev = rs.getString(1).toLowerCase() + "s";
+                    insights.put(sev, rs.getInt(2));
+                }
+            }
+
+            // Recommendation outcomes summary
+            try (PreparedStatement ps = c.prepareStatement(
+                    "SELECT outcome_verdict, COUNT(*), AVG(impact_score) FROM recommendation_outcomes " +
+                    "WHERE business_id=? AND outcome_verdict != 'PENDING' GROUP BY outcome_verdict")) {
+                ps.setObject(1, businessId);
+                ResultSet rs = ps.executeQuery();
+                Map<String, Object> outcomes = new HashMap<>();
+                while (rs.next()) {
+                    Map<String, Object> verdictData = new HashMap<>();
+                    verdictData.put("count", rs.getInt(2));
+                    verdictData.put("avgImpact", rs.getDouble(3));
+                    outcomes.put(rs.getString(1), verdictData);
+                }
+                if (!outcomes.isEmpty()) {
+                    insights.put("recommendationOutcomes", outcomes);
+                }
+            }
+
+            // Latest staleness signals
+            try (PreparedStatement ps = c.prepareStatement(
+                    "SELECT staleness_signals, freshness_score, recommended_action FROM strategy_effectiveness " +
+                    "WHERE business_id=? ORDER BY created_at DESC LIMIT 1")) {
+                ps.setObject(1, businessId);
+                ResultSet rs = ps.executeQuery();
+                if (rs.next()) {
+                    String signalsJson = rs.getString(1);
+                    if (signalsJson != null && !signalsJson.equals("[]")) {
+                        List<String> signals = om.readValue(signalsJson, new TypeReference<List<String>>() {});
+                        insights.put("stalenessSignals", signals);
+                    }
+                    insights.put("freshnessScore", rs.getInt(2));
+                    insights.put("recommendedAction", rs.getString(3));
+                }
+            }
+
+            // Recent learning notes from events
+            try (PreparedStatement ps = c.prepareStatement(
+                    "SELECT event_type, event_data FROM learning_events " +
+                    "WHERE business_id=? AND severity IN ('WARNING','CRITICAL') " +
+                    "AND created_at > NOW() - INTERVAL '14 days' ORDER BY created_at DESC LIMIT 5")) {
+                ps.setObject(1, businessId);
+                ResultSet rs = ps.executeQuery();
+                List<String> notes = new ArrayList<>();
+                while (rs.next()) {
+                    String eventType = rs.getString(1);
+                    String data = rs.getString(2);
+                    notes.add("[" + eventType + "] " + (data != null ? data : ""));
+                }
+                if (!notes.isEmpty()) {
+                    insights.put("learningNotes", notes);
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Failed to fetch learning insights for businessId={}: {}", businessId, e.getMessage());
+        }
+        return insights;
     }
 }
