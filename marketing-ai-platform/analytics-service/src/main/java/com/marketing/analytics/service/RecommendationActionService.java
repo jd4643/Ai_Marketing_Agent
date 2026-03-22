@@ -168,7 +168,46 @@ public class RecommendationActionService {
         pkg.put("trackingChecklist", buildTrackingChecklist(platform));
         pkg.put("notes", buildLaunchNotes(rec));
 
+        pkg.put("generationServiceLinks", buildGenerationServiceLinks(businessId, recommendationId, platform, objective));
+
         return pkg;
+    }
+
+    private Map<String, Object> buildGenerationServiceLinks(UUID businessId, UUID recommendationId,
+                                                              String platform, String objective) {
+        Map<String, Object> links = new LinkedHashMap<>();
+
+        Map<String, Object> landingPage = new LinkedHashMap<>();
+        landingPage.put("endpoint", "POST /generate/landing-page");
+        landingPage.put("description", "Generate an AI-powered landing page for this campaign");
+        landingPage.put("suggestedPayload", Map.of(
+                "business_id", businessId.toString(),
+                "platform", platform,
+                "objective", objective
+        ));
+        links.put("generateLandingPage", landingPage);
+
+        Map<String, Object> offer = new LinkedHashMap<>();
+        offer.put("endpoint", "POST /generate/offer");
+        offer.put("description", "Generate a promotional offer with copy variants");
+        offer.put("suggestedPayload", Map.of(
+                "business_id", businessId.toString(),
+                "platform", platform,
+                "offer_type", "percentage_discount"
+        ));
+        links.put("generateOffer", offer);
+
+        Map<String, Object> launchPkg = new LinkedHashMap<>();
+        launchPkg.put("endpoint", "POST /generate/launch-package");
+        launchPkg.put("description", "Generate a comprehensive AI-enhanced launch package combining landing page, offer, and campaign strategy");
+        launchPkg.put("suggestedPayload", Map.of(
+                "business_id", businessId.toString(),
+                "recommendation_id", recommendationId.toString(),
+                "platform", platform
+        ));
+        links.put("generateEnhancedLaunchPackage", launchPkg);
+
+        return links;
     }
 
     private Map<String, Object> buildDashboardCard(CreativeOptimizationRecommendation rec) {

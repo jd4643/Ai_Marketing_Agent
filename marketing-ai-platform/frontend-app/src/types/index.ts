@@ -311,3 +311,166 @@ export interface ConnectionInfo {
   status: string;
   lastSyncedAt: string | null;
 }
+
+/* ── Landing Page Generation ── */
+export interface LandingPageSectionInput {
+  type: string;
+  heading?: string;
+  body?: string;
+}
+
+export interface LandingPageRequest {
+  business_id: string;
+  platform?: string;
+  objective?: string;
+  page_goal?: string;
+  product_name?: string;
+  product_description?: string;
+  target_audience?: string;
+  brand_voice?: string;
+  primary_color?: string;
+  sections?: LandingPageSectionInput[];
+  strategy_request_id?: string;
+  include_seo?: boolean;
+  include_social_proof?: boolean;
+}
+
+export interface LandingPageSection {
+  type: string;
+  heading: string;
+  body: string;
+  ctaText?: string;
+  ctaUrl?: string;
+}
+
+export interface LandingPageResponse {
+  requestId: string;
+  businessId: string;
+  status: string;
+  provider: string;
+  metaTitle: string;
+  metaDescription: string;
+  sections: LandingPageSection[];
+  platform: string;
+  objective: string;
+  createdAt: string;
+}
+
+export interface LandingPageListResponse {
+  businessId: string;
+  landingPages: LandingPageResponse[];
+  count: number;
+}
+
+/* ── Offer Generation ── */
+export interface OfferRequest {
+  business_id: string;
+  platform?: string;
+  offer_type?: string;
+  product_name?: string;
+  product_price?: number;
+  discount_value?: string;
+  target_audience?: string;
+  urgency_window?: string;
+  brand_voice?: string;
+  strategy_request_id?: string;
+  goal?: string;
+  include_email_copy?: boolean;
+}
+
+export interface OfferResponse {
+  requestId: string;
+  businessId: string;
+  status: string;
+  provider: string;
+  offerType: string;
+  headline: string;
+  description: string;
+  terms: string;
+  urgencyHook: string;
+  ctaPrimary: string;
+  ctaVariants: string[];
+  valueProposition: string;
+  emailSubjectLine: string;
+  adCopySnippet: string;
+  platform: string;
+  createdAt: string;
+}
+
+export interface OfferListResponse {
+  businessId: string;
+  offers: OfferResponse[];
+  count: number;
+}
+
+/* ── Enhanced Launch Package Generation ── */
+export interface EnhancedLaunchPackageRequest {
+  business_id: string;
+  recommendation_id: string;
+  platform?: string;
+  monthly_budget?: number;
+  objective?: string;
+  target_audience?: string;
+  landing_page_goal?: string;
+  offer_type?: string;
+}
+
+export interface LaunchPackageLandingPage {
+  metaTitle: string;
+  metaDescription: string;
+  sections: LandingPageSection[];
+}
+
+export interface LaunchPackageOffer {
+  headline: string;
+  description: string;
+  terms: string;
+  urgencyHook: string;
+  ctaPrimary: string;
+  ctaVariants: string[];
+  valueProposition: string;
+  emailSubjectLine: string;
+  adCopySnippet: string;
+}
+
+export interface LaunchPackageCampaignStrategy {
+  campaignBrief: string;
+  audienceStrategy: string;
+  budgetAllocation: string;
+  creativeRotation: string;
+  launchTimeline: string;
+  kpiTargets: string;
+  optimizationPlaybook: string;
+}
+
+export interface EnhancedLaunchPackageResponse {
+  requestId: string;
+  businessId: string;
+  recommendationId: string;
+  status: string;
+  provider: string;
+  platform: string;
+  landingPage: LaunchPackageLandingPage;
+  offer: LaunchPackageOffer;
+  campaignStrategy: LaunchPackageCampaignStrategy;
+  createdAt: string;
+}
+
+export interface LaunchPackageListResponse {
+  businessId: string;
+  launchPackages: EnhancedLaunchPackageResponse[];
+  count: number;
+}
+
+/* ── Generation Service Links (from export-launch-package) ── */
+export interface GenerationServiceLink {
+  endpoint: string;
+  description: string;
+  suggestedPayload: Record<string, string>;
+}
+
+export interface GenerationServiceLinks {
+  generateLandingPage: GenerationServiceLink;
+  generateOffer: GenerationServiceLink;
+  generateEnhancedLaunchPackage: GenerationServiceLink;
+}

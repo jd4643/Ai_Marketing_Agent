@@ -223,6 +223,34 @@ class RecommendationActionServiceTest {
             assertNotNull(pkg.get("landingPageGuidance"));
             assertNotNull(pkg.get("trackingChecklist"));
             assertNotNull(pkg.get("notes"));
+            assertNotNull(pkg.get("generationServiceLinks"));
+        }
+
+        @Test void exportContainsGenerationServiceLinks() {
+            UUID businessId = UUID.randomUUID();
+            CreativeOptimizationRecommendation rec = buildRec("SCALE", "HIGH", "OPEN");
+            rec.setBusinessId(businessId);
+            rec.setReasoningJson("{\"platform\":\"meta\"}");
+
+            when(recRepo.findById(rec.getId())).thenReturn(Optional.of(rec));
+
+            Map<String, Object> pkg = service.exportLaunchPackage(businessId, rec.getId());
+
+            @SuppressWarnings("unchecked")
+            Map<String, Object> links = (Map<String, Object>) pkg.get("generationServiceLinks");
+            assertNotNull(links);
+            assertTrue(links.containsKey("generateLandingPage"));
+            assertTrue(links.containsKey("generateOffer"));
+            assertTrue(links.containsKey("generateEnhancedLaunchPackage"));
+
+            @SuppressWarnings("unchecked")
+            Map<String, Object> lpLink = (Map<String, Object>) links.get("generateLandingPage");
+            assertEquals("POST /generate/landing-page", lpLink.get("endpoint"));
+            @SuppressWarnings("unchecked")
+            Map<String, Object> lpPayload = (Map<String, Object>) lpLink.get("suggestedPayload");
+            assertEquals(businessId.toString(), lpPayload.get("business_id"));
+            assertEquals("meta", lpPayload.get("platform"));
+            assertEquals("conversions", lpPayload.get("objective"));
         }
 
         @Test void exportScaleObjectiveIsConversions() {

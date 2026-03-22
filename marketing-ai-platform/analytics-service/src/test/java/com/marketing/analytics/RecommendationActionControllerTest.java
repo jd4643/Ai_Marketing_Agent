@@ -219,6 +219,11 @@ class RecommendationActionControllerTest {
         pkg.put("landingPageGuidance", "Ensure landing page matches ad promise");
         pkg.put("trackingChecklist", List.of("Install pixel", "Setup conversion events"));
         pkg.put("notes", List.of("Generated from SCALE recommendation"));
+        pkg.put("generationServiceLinks", Map.of(
+                "generateLandingPage", Map.of("endpoint", "POST /generate/landing-page"),
+                "generateOffer", Map.of("endpoint", "POST /generate/offer"),
+                "generateEnhancedLaunchPackage", Map.of("endpoint", "POST /generate/launch-package")
+        ));
 
         when(actionService.exportLaunchPackage(businessId, recId)).thenReturn(pkg);
 
@@ -232,7 +237,10 @@ class RecommendationActionControllerTest {
             .andExpect(jsonPath("$.copy.headline").value("Test headline"))
             .andExpect(jsonPath("$.assetLinks").isArray())
             .andExpect(jsonPath("$.trackingChecklist").isArray())
-            .andExpect(jsonPath("$.notes").isArray());
+            .andExpect(jsonPath("$.notes").isArray())
+            .andExpect(jsonPath("$.generationServiceLinks.generateLandingPage.endpoint").value("POST /generate/landing-page"))
+            .andExpect(jsonPath("$.generationServiceLinks.generateOffer.endpoint").value("POST /generate/offer"))
+            .andExpect(jsonPath("$.generationServiceLinks.generateEnhancedLaunchPackage.endpoint").value("POST /generate/launch-package"));
     }
 
     @Test void exportLaunchPackageNotFound() throws Exception {
