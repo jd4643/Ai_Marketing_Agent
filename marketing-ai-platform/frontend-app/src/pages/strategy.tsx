@@ -3,10 +3,11 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { Compass } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Compass, Palette } from 'lucide-react';
 import { useBusiness } from '../hooks/use-business';
 import { useToast } from '../hooks/use-toast';
-import { generateStrategy, getStrategyHistory } from '../api/strategy';
+import { generateStrategy, getStrategy, getStrategyHistory } from '../api/strategy';
 import { SectionCard } from '../components/ui/section-card';
 import { PageSkeleton } from '../components/ui/loading-skeleton';
 import { StatusBadge } from '../components/ui/status-badge';
@@ -104,7 +105,9 @@ const OBJECTIVES = [
 export default function StrategyPage() {
   const { businessId } = useBusiness();
   const { addToast } = useToast();
+  const navigate = useNavigate();
   const [strategy, setStrategy] = useState<StrategyResponse | null>(null);
+  const [loadingStrategyId, setLoadingStrategyId] = useState<string | null>(null);
 
   const { register, handleSubmit, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(schema),
@@ -134,6 +137,22 @@ export default function StrategyPage() {
       monthlyBudget: Number(data.monthlyBudget),
       notes: data.notes,
     });
+  };
+
+  const handleLoadStrategy = (requestId: string) => {
+    setLoadingStrategyId(requestId);
+    getStrategy(requestId)
+      .then((data) => {
+        setStrategy(data);
+        addToast('success', 'Strategy loaded');
+      })
+      .catch((err: Error) => addToast('error', err.message))
+      .finally(() => setLoadingStrategyId(null));
+  };
+
+  const handleGenerateCreatives = () => {
+    if (!strategy) return;
+    navigate('/creatives', { state: { strategyRequestId: strategy.requestId } });
   };
 
   return (
@@ -180,6 +199,12 @@ export default function StrategyPage() {
           <div className="flex items-center gap-3">
             <h2 className="text-xl font-bold tracking-tight text-gray-900">Your Strategy</h2>
             <StatusBadge label={strategy.strategyVersion ?? 'v1'} />
+            <button
+              onClick={handleGenerateCreatives}
+              className="ml-auto flex items-center gap-1.5 rounded-lg bg-brand-500 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-600"
+            >
+              <Palette size={16} /> Generate Creatives from Strategy
+            </button>
           </div>
 
           {isNonEmpty(strategy.businessSnapshot) && (
@@ -279,8 +304,14 @@ export default function StrategyPage() {
               </thead>
               <tbody>
                 {history.data.map((h) => (
-                  <tr key={h.requestId} className="border-b last:border-0 transition-colors hover:bg-gray-50/60">
-                    <td className="px-5 py-3">{h.objective}</td>
+                  <tr
+                    key={h.requestId}
+                    onClick={() => handleLoadStrategy(h.requestId)}
+                    className="border-b last:border-0 transition-colors hover:bg-gray-50/60 cursor-pointer"
+                  >
+                    <td className="px-5 py-3">
+                      {loadingStrategyId === h.requestId ? 'Loading...' : h.objective}
+                    </td>
                     <td className="px-5 py-3 tabular-nums">${h.monthlyBudget}</td>
                     <td className="px-5 py-3"><StatusBadge label={h.status} /></td>
                     <td className="px-5 py-3 text-gray-500">{new Date(h.createdAt).toLocaleDateString()}</td>

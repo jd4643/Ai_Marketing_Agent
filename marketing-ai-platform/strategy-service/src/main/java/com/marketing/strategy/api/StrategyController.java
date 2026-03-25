@@ -48,6 +48,11 @@ public class StrategyController {
         return service.generate(new StrategyRequest(req.businessId(), req.objective(), req.monthlyBudget(), req.trends(), req.notes()), requestId);
     }
 
+    @GetMapping("/{requestId}")
+    public StrategyResponse get(@PathVariable UUID requestId) {
+        return service.getByRequestId(requestId);
+    }
+
     @GetMapping("/history")
     public List<HistorySummary> history(@RequestParam UUID businessId, @RequestParam(defaultValue = "20") @Min(1) @Max(100) int limit) {
         return service.history(businessId, limit);

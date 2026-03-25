@@ -1,15 +1,17 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
+import { useLocation } from 'react-router-dom';
 import { useBusiness } from '../hooks/use-business';
 import { useToast } from '../hooks/use-toast';
 import { generateCreatives } from '../api/creative';
 import { generateAssets } from '../api/generation';
+import { getStrategyHistory } from '../api/strategy';
 import { PageSkeleton } from '../components/ui/loading-skeleton';
 import { EmptyState } from '../components/ui/empty-state';
-import { Palette, ImageIcon, Video } from 'lucide-react';
+import { Palette, ImageIcon, Video, Compass } from 'lucide-react';
 
 const schema = z.object({
   platform: z.string().min(1),
@@ -34,7 +36,23 @@ interface Concept {
 export default function CreativesPage() {
   const { businessId } = useBusiness();
   const { addToast } = useToast();
+  const location = useLocation();
   const [concepts, setConcepts] = useState<Concept[]>([]);
+  const [selectedStrategyId, setSelectedStrategyId] = useState<string>('');
+
+  // Pick up strategyRequestId if navigated from strategy page
+  useEffect(() => {
+    const navState = location.state as { strategyRequestId?: string } | null;
+    if (navState?.strategyRequestId) {
+      setSelectedStrategyId(navState.strategyRequestId);
+    }
+  }, [location.state]);
+
+  const strategyHistory = useQuery({
+    queryKey: ['strategy-history', businessId],
+    queryFn: () => getStrategyHistory(businessId!),
+    enabled: !!businessId,
+  });
 
   const { register, handleSubmit } = useForm<FormData>({
     resolver: zodResolver(schema),
@@ -58,7 +76,11 @@ export default function CreativesPage() {
   });
 
   const onSubmit = (data: FormData) => {
-    genMutation.mutate({ businessId: businessId!, ...data });
+    genMutation.mutate({
+      businessId: businessId!,
+      ...data,
+      ...(selectedStrategyId ? { strategyRequestId: selectedStrategyId } : {}),
+    });
   };
 
   const handleGenerateAsset = (concept: Concept, assetType: 'image' | 'video') => {
@@ -83,6 +105,30 @@ export default function CreativesPage() {
 
       {/* Form */}
       <div className="rounded-xl border border-border bg-surface p-6 shadow-sm">
+        {/* Strategy Selector */}
+        <div className="mb-4">
+          <label className="block text-sm font-medium text-gray-700">
+            <span className="flex items-center gap-1.5"><Compass size={14} /> Linked Strategy</span>
+          </label>
+          <select
+            value={selectedStrategyId}
+            onChange={(e) => setSelectedStrategyId(e.target.value)}
+            className="form-input mt-1"
+          >
+            <option value="">None — Generate freely</option>
+            {strategyHistory.data?.map((s) => (
+              <option key={s.requestId} value={s.requestId}>
+                {s.objective} — ${s.monthlyBudget} ({new Date(s.createdAt).toLocaleDateString()})
+              </option>
+            ))}
+          </select>
+          {selectedStrategyId && (
+            <p className="mt-1 text-xs text-brand-600">
+              Creatives will align with the selected strategy's creative direction, messaging, and audience.
+            </p>
+          )}
+        </div>
+
         <form onSubmit={handleSubmit(onSubmit)} className="grid grid-cols-1 gap-4 sm:grid-cols-4">
           <div>
             <label className="block text-sm font-medium text-gray-700">Platform</label>

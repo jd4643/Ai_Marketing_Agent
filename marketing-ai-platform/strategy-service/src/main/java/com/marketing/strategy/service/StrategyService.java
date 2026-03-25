@@ -1086,6 +1086,22 @@ public class StrategyService {
         }
     }
 
+    public StrategyResponse getByRequestId(UUID requestId) {
+        try (Connection c = ds.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "SELECT response_json::text FROM strategy_history WHERE request_id = ? ORDER BY created_at DESC LIMIT 1")) {
+            ps.setObject(1, requestId);
+            ResultSet rs = ps.executeQuery();
+            if (rs.next()) {
+                Map<String, Object> resp = om.readValue(rs.getString(1), new TypeReference<Map<String, Object>>() {});
+                return toResponse(resp);
+            }
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+        throw new IllegalArgumentException("Strategy not found: " + requestId);
+    }
+
     public List<StrategyIntelSummary> intelHistory(UUID businessId, int limit) {
         return intelRepository.findTop50ByBusinessIdOrderByCreatedAtDesc(businessId).stream().limit(limit)
                 .map(i -> new StrategyIntelSummary(i.getRequestId(), i.getChosenTemplateKey(), i.getConfidenceScore(), i.getMonthlyBudget(), i.getObjective(), i.getCreatedAt()))
