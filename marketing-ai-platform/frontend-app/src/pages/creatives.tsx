@@ -62,7 +62,7 @@ export default function CreativesPage() {
   const genMutation = useMutation({
     mutationFn: generateCreatives,
     onSuccess: (data) => {
-      const list = (data as Record<string, unknown>).concepts as Concept[] | undefined;
+      const list = (data as Record<string, unknown>).creativeConcepts as Concept[] | undefined;
       setConcepts(list ?? []);
       addToast('success', `Generated ${list?.length ?? 0} concepts`);
     },
