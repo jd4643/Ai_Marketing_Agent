@@ -7,7 +7,7 @@ public class CreativeService {
  private static final Logger log = LoggerFactory.getLogger(CreativeService.class);
  private final DataSource ds; private final ObjectMapper om=new ObjectMapper(); private final OkHttpClient client;
  @Value("${openai.api-key:}") String apiKey; @Value("${openai.model:gpt-4o-mini}") String model;
- public CreativeService(DataSource ds,@Value("${openai.timeout-seconds:15}") int timeout){this.ds=ds;this.client=new OkHttpClient.Builder().callTimeout(java.time.Duration.ofSeconds(timeout)).build();}
+ public CreativeService(DataSource ds,@Value("${openai.timeout-seconds:15}") int timeout){this.ds=ds;this.client=new OkHttpClient.Builder().connectTimeout(java.time.Duration.ofSeconds(30)).readTimeout(java.time.Duration.ofSeconds(timeout)).writeTimeout(java.time.Duration.ofSeconds(30)).callTimeout(java.time.Duration.ofSeconds(timeout+60)).build();}
  public Map<String,Object> generate(GenerateRequest req, UUID requestId){
   Map<String,Object> business=business(req.businessId()); if(business.isEmpty()) throw new IllegalArgumentException("businessId not found");
   List<String> trends=req.trendsOverride()!=null&&!req.trendsOverride().isEmpty()?req.trendsOverride():trends((String)business.get("industry"));
