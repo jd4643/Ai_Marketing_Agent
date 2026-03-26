@@ -357,6 +357,21 @@ public class CreativeService {
   return out;
  }
  private String strategy(UUID rid){ try(Connection c=ds.getConnection(); PreparedStatement ps=c.prepareStatement("SELECT response_json::text FROM strategy_history WHERE request_id=? ORDER BY created_at DESC LIMIT 1")){ps.setObject(1,rid); ResultSet rs=ps.executeQuery(); if(rs.next()) return rs.getString(1);}catch(Exception e){throw new RuntimeException(e);} return "none"; }
+ public List<Map<String,Object>> history(UUID businessId){
+  List<Map<String,Object>> out=new ArrayList<>();
+  try(Connection c=ds.getConnection(); PreparedStatement ps=c.prepareStatement(
+    "SELECT id,platform,format,angle,hook,performance_score,created_at FROM creatives WHERE business_id=? ORDER BY created_at DESC LIMIT 50")){
+   ps.setObject(1,businessId); ResultSet rs=ps.executeQuery();
+   while(rs.next()){
+    Map<String,Object> m=new LinkedHashMap<>();
+    m.put("id",rs.getObject(1).toString()); m.put("platform",rs.getString(2)); m.put("format",rs.getString(3));
+    m.put("angle",rs.getString(4)); m.put("hook",rs.getString(5));
+    Object score=rs.getObject(6); m.put("performanceScore",score); m.put("createdAt",rs.getTimestamp(7).toInstant().toString());
+    out.add(m);
+   }
+  }catch(Exception e){log.warn("Failed to query creative history: {}",e.getMessage());}
+  return out;
+ }
  private void storeCreative(UUID businessId,String platform,String format,String angle,String hook){ try(Connection c=ds.getConnection(); PreparedStatement ps=c.prepareStatement("INSERT INTO creatives(id,business_id,platform,format,angle,hook,performance_score,created_at) VALUES (?,?,?,?,?,?,NULL,?)")){ps.setObject(1,UUID.randomUUID());ps.setObject(2,businessId);ps.setString(3,platform);ps.setString(4,format);ps.setString(5,angle);ps.setString(6,hook);ps.setTimestamp(7,Timestamp.from(Instant.now())); ps.executeUpdate();}catch(Exception e){throw new RuntimeException(e);} }
  private List<Map<String,Object>> openRecommendations(UUID businessId){
   List<Map<String,Object>> out=new ArrayList<>();

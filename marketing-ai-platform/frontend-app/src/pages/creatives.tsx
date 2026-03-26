@@ -2,16 +2,16 @@ import { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { useMutation, useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useLocation } from 'react-router-dom';
 import { useBusiness } from '../hooks/use-business';
 import { useToast } from '../hooks/use-toast';
-import { generateCreatives } from '../api/creative';
-import { generateAssets } from '../api/generation';
+import { generateCreatives, getCreativesHistory } from '../api/creative';
+import { generateAssets, getAssets } from '../api/generation';
 import { getStrategyHistory } from '../api/strategy';
 import { PageSkeleton } from '../components/ui/loading-skeleton';
 import { EmptyState } from '../components/ui/empty-state';
-import { Palette, ImageIcon, Video, Compass } from 'lucide-react';
+import { Palette, ImageIcon, Video, Compass, Clock, ExternalLink, ChevronDown, ChevronUp } from 'lucide-react';
 
 const schema = z.object({
   platform: z.string().min(1),
@@ -37,8 +37,11 @@ export default function CreativesPage() {
   const { businessId } = useBusiness();
   const { addToast } = useToast();
   const location = useLocation();
+  const queryClient = useQueryClient();
   const [concepts, setConcepts] = useState<Concept[]>([]);
   const [selectedStrategyId, setSelectedStrategyId] = useState<string>('');
+  const [showHistory, setShowHistory] = useState(false);
+  const [generatedAsset, setGeneratedAsset] = useState<{ url?: string; assetType: string; conceptName: string } | null>(null);
 
   // Pick up strategyRequestId if navigated from strategy page
   useEffect(() => {
@@ -54,6 +57,18 @@ export default function CreativesPage() {
     enabled: !!businessId,
   });
 
+  const creativesHistory = useQuery({
+    queryKey: ['creatives-history', businessId],
+    queryFn: () => getCreativesHistory(businessId!),
+    enabled: !!businessId,
+  });
+
+  const generatedAssets = useQuery({
+    queryKey: ['generated-assets', businessId],
+    queryFn: () => getAssets(businessId!),
+    enabled: !!businessId,
+  });
+
   const { register, handleSubmit } = useForm<FormData>({
     resolver: zodResolver(schema),
     defaultValues: { platform: 'meta', format: 'image', objective: 'Lead Generation' },
@@ -65,13 +80,23 @@ export default function CreativesPage() {
       const list = (data as Record<string, unknown>).creativeConcepts as Concept[] | undefined;
       setConcepts(list ?? []);
       addToast('success', `Generated ${list?.length ?? 0} concepts`);
+      queryClient.invalidateQueries({ queryKey: ['creatives-history', businessId] });
     },
     onError: (err: Error) => addToast('error', err.message),
   });
 
   const assetMutation = useMutation({
     mutationFn: generateAssets,
-    onSuccess: () => addToast('success', 'Asset generation started!'),
+    onSuccess: (data) => {
+      const assets = data.assets ?? [];
+      if (assets.length > 0 && assets[0].url) {
+        setGeneratedAsset({ url: assets[0].url, assetType: assets[0].assetType, conceptName: '' });
+        addToast('success', 'Asset generated successfully!');
+      } else {
+        addToast('success', 'Asset generation queued — check the Generated Assets section below.');
+      }
+      queryClient.invalidateQueries({ queryKey: ['generated-assets', businessId] });
+    },
     onError: (err: Error) => addToast('error', err.message),
   });
 
@@ -236,6 +261,106 @@ export default function CreativesPage() {
           title="No concepts yet"
           description="Fill out the form above to generate creative concepts tailored to your business."
         />
+      )}
+
+      {/* Generated Assets Gallery */}
+      {generatedAssets.data && generatedAssets.data.assets && generatedAssets.data.assets.length > 0 && (
+        <div className="space-y-3">
+          <h2 className="flex items-center gap-2 text-lg font-semibold text-gray-900">
+            <ImageIcon size={18} className="text-brand-500" />
+            Generated Assets ({generatedAssets.data.assets.length})
+          </h2>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {generatedAssets.data.assets.map((asset) => (
+              <div key={asset.assetId} className="rounded-xl border border-border bg-surface shadow-sm overflow-hidden transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md">
+                {asset.url ? (
+                  <a href={asset.url} target="_blank" rel="noopener noreferrer" className="block">
+                    <div className="relative h-40 bg-gradient-to-br from-gray-50 to-gray-100">
+                      <img src={asset.url} alt={asset.assetType} className="h-full w-full object-cover" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                      <div className="absolute top-2 right-2">
+                        <ExternalLink size={14} className="text-gray-400" />
+                      </div>
+                    </div>
+                  </a>
+                ) : (
+                  <div className="flex h-40 items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100">
+                    <ImageIcon size={32} className="text-gray-300" />
+                  </div>
+                )}
+                <div className="p-3 space-y-1">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-medium uppercase tracking-wider text-gray-400">{asset.assetType} &middot; {asset.platform ?? 'N/A'}</span>
+                    <span className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-semibold ${asset.status === 'SUCCESS' ? 'bg-green-50 text-green-700' : asset.status === 'FAILED' ? 'bg-red-50 text-red-700' : 'bg-yellow-50 text-yellow-700'}`}>
+                      {asset.status}
+                    </span>
+                  </div>
+                  <p className="text-xs text-gray-500 line-clamp-2">{asset.promptText}</p>
+                  <p className="text-[10px] text-gray-400">{new Date(asset.createdAt).toLocaleString()}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Creatives History */}
+      {creativesHistory.data && creativesHistory.data.length > 0 && (
+        <div className="rounded-xl border border-border bg-surface shadow-sm">
+          <button
+            onClick={() => setShowHistory(!showHistory)}
+            className="flex w-full items-center justify-between px-6 py-4 text-left"
+          >
+            <h2 className="flex items-center gap-2 text-lg font-semibold text-gray-900">
+              <Clock size={18} className="text-brand-500" />
+              Creative History ({creativesHistory.data.length})
+            </h2>
+            {showHistory ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+          </button>
+          {showHistory && (
+            <div className="border-t border-border px-6 pb-4">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm mt-3">
+                  <thead>
+                    <tr className="border-b text-left text-gray-500">
+                      <th className="pb-2 pr-4">Hook</th>
+                      <th className="pb-2 pr-4">Angle</th>
+                      <th className="pb-2 pr-4">Platform</th>
+                      <th className="pb-2 pr-4">Format</th>
+                      <th className="pb-2">Created</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {creativesHistory.data.map((h) => (
+                      <tr key={h.id} className="border-b last:border-0">
+                        <td className="py-2 pr-4 max-w-[200px] truncate">{h.hook}</td>
+                        <td className="py-2 pr-4 max-w-[150px] truncate">{h.angle}</td>
+                        <td className="py-2 pr-4 capitalize">{h.platform}</td>
+                        <td className="py-2 pr-4 capitalize">{h.format}</td>
+                        <td className="py-2 text-gray-500">{new Date(h.createdAt).toLocaleDateString()}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Asset Preview Modal */}
+      {generatedAsset?.url && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setGeneratedAsset(null)}>
+          <div className="max-w-2xl w-full rounded-xl bg-white p-6 shadow-xl space-y-4" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between">
+              <h3 className="font-semibold text-gray-900">Generated {generatedAsset.assetType}</h3>
+              <button onClick={() => setGeneratedAsset(null)} className="text-gray-400 hover:text-gray-600">&times;</button>
+            </div>
+            <img src={generatedAsset.url} alt="Generated asset" className="w-full rounded-lg" />
+            <a href={generatedAsset.url} target="_blank" rel="noopener noreferrer" className="btn-primary inline-flex items-center gap-1 text-sm">
+              <ExternalLink size={14} /> Open Full Size
+            </a>
+          </div>
+        </div>
       )}
     </div>
   );
